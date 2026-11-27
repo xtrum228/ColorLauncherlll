@@ -1,0 +1,88 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Prepare web files
+        run: |
+          mkdir -p www/vendor
+          cp index.html www/index.html
+          ok=0
+          for url in \
+            https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js \
+            https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.min.js
+          do
+            if curl -fsSL --retry 3 "$url" -o www/vendor/stockfish.js && [ -s www/vendor/stockfish.js ]; then
+              ok=1
+              break
+            fi
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::warning::Stockfish did not download, the app will load it from the internet at launch"
+            rm -f www/vendor/stockfish.js
+          fi
+          ls -la www www/vendor
+
+      - name: Create Capacitor project
+        run: |
+          npm init -y
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.chesscam.app",
+            "appName": "ChessCam",
+            "webDir": "www"
+          }
+          EOF
+          npx cap add android
+
+      - name: Add camera permission
+        run: |
+          f=android/app/src/main/AndroidManifest.xml
+          grep -q "android.permission.CAMERA" "$f" || sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' "$f"
+          cat "$f"
+
+      - name: Build debug APK
+        run: |
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChessCam-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish APK to Releases
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: ChessCam build ${{ github.run_number }}
+          files: android/app/build/outputs/apk/debug/app-debug.apk
