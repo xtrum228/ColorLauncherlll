@@ -6,34 +6,25 @@
 <title>Шахматный помощник AR</title>
 <style>
 :root{
-  color-scheme: light;
-  --bg:#EEF2F5; --surface:#FFFFFF; --line:#D3DCE3; --text:#17212B; --muted:#58697A;
-  --accent:#C98500; --accent-ink:#FFFFFF; --ok:#1F8F5F; --bad:#C8402F;
-  --sq-l:#DCE4EA; --sq-d:#6E8CA3; --hl:#E39A00; --last:rgba(245,184,61,.5);
-}
-@media (prefers-color-scheme: dark){
-  :root{
-    color-scheme: dark;
-    --bg:#12181F; --surface:#1B242E; --line:#2B3744; --text:#E8EEF2; --muted:#8EA0AF;
-    --accent:#F5B83D; --accent-ink:#1A1200; --ok:#4CC38A; --bad:#FF7A6B;
-    --hl:#F5B83D; --last:rgba(245,184,61,.4);
-  }
+  color-scheme: dark;
+  --bg:#0D1217; --surface:#151D25; --line:#273442; --text:#EEF3F7; --muted:#8D9FAE;
+  --accent:#F5B83D; --accent-ink:#181100; --ok:#3FD08A; --bad:#FF6E60;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--text);
   font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif}
-.wrap{max-width:560px;margin:0 auto;padding:12px 12px 40px;padding-top:max(12px,env(safe-area-inset-top))}
+.wrap{max-width:560px;margin:0 auto;padding:12px 12px 36px;padding-top:max(12px,env(safe-area-inset-top))}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 2px 10px}
 h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
 .badge{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:3px 10px;white-space:nowrap}
 .badge.ok{color:var(--ok);border-color:var(--ok)}
 .badge.bad{color:var(--bad);border-color:var(--bad)}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
-.stage{position:relative;border-radius:10px;overflow:hidden;background:#0c1116;min-height:150px}
+.stage{position:relative;border-radius:10px;overflow:hidden;background:#070A0D;min-height:220px}
 .stage canvas{display:none;width:100%;height:auto}
 .stage.on canvas{display:block}
 .stage-msg{position:absolute;left:8px;right:8px;bottom:8px;padding:8px 10px;border-radius:8px;
-  background:rgba(8,12,16,.78);color:#F2F5F7;font-size:14px;z-index:10}
+  background:rgba(8,12,16,.82);color:#F2F5F7;font-size:14px;z-index:10}
 .stage:not(.on) .stage-msg{top:0;bottom:0;left:0;right:0;border-radius:0;display:flex;align-items:center;justify-content:center;text-align:center;background:transparent;color:#9fb0be}
 .stage-msg[hidden]{display:none}
 .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
@@ -55,27 +46,8 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
 .hint-line.good{color:var(--ok);font-weight:600}
 .hint-line.muted{color:var(--muted);font-size:13px}
 .cands-title{font-size:14px;color:var(--muted);margin:0 0 8px}
-.board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;aspect-ratio:1/1;border-radius:8px;overflow:hidden;container-type:inline-size;touch-action:manipulation}
-.cell{position:relative;display:flex;align-items:center;justify-content:center;line-height:1;user-select:none;-webkit-user-select:none;
-  font-size:8vw;font-size:min(8vw,44px);font-size:9cqw}
-.cell.l{background-color:var(--sq-l)}
-.cell.d{background-color:var(--sq-d)}
-.cell.last{background-image:linear-gradient(var(--last),var(--last))}
-.cell.hf,.cell.ht{outline:3px solid var(--hl);outline-offset:-3px}
-.cell.ht{background-image:linear-gradient(var(--last),var(--last))}
-.cell.sel{outline:3px solid var(--text);outline-offset:-3px}
-.cell.chk{background-image:radial-gradient(circle,rgba(220,50,40,.85) 0%,rgba(220,50,40,0) 72%)}
-.cell.dot::after{content:"";position:absolute;width:26%;height:26%;border-radius:50%;background:rgba(20,30,40,.38)}
-.pc{position:relative;z-index:1}
-.pc.w{color:#fff;text-shadow:0 0 1px #000,0 0 2px #000,0 1px 2px rgba(0,0,0,.55)}
-.pc.b{color:#10161c;text-shadow:0 0 1px rgba(255,255,255,.55)}
-.rk,.fl{position:absolute;font-size:10px;font-weight:600;color:var(--text);opacity:.6;z-index:2;pointer-events:none}
-.rk{left:3px;top:2px}
-.fl{right:3px;bottom:1px}
-.l .rk,.l .fl{color:#33495a}
-.d .rk,.d .fl{color:#F4F8FA}
 .cands-list{display:flex;flex-wrap:wrap;gap:8px}
-.moves{font-size:14px;line-height:1.7;max-height:132px;overflow:auto;color:var(--text)}
+.moves{font-size:14px;line-height:1.7;max-height:120px;overflow:auto;color:var(--text)}
 .moves .n{color:var(--muted);margin-left:6px}
 .moves:empty::before{content:"Ходов пока нет";color:var(--muted)}
 .label{font-size:14px;color:var(--muted);align-self:center;margin-right:2px}
@@ -103,18 +75,14 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
       <button class="btn primary" id="btnCam">Включить камеру</button>
       <button class="btn" id="btnCalib" disabled>Разметить доску</button>
       <button class="btn" id="btnRot" disabled>Повернуть сетку</button>
-      <button class="btn" id="btnToggleAR" disabled>Фигуры: ВКЛ</button>
+      <button class="btn" id="btnToggleAR" disabled>AR фигуры: ВКЛ</button>
     </div>
-    <p class="status" id="camStat" aria-live="polite">Сначала включи камеру и наведи её на доску.</p>
+    <p class="status" id="camStat" aria-live="polite">Включи камеру и наведи на доску.</p>
   </section>
 
   <section class="panel" id="hint" aria-live="polite"></section>
 
   <section class="panel" id="cands" hidden></section>
-
-  <section class="panel">
-    <div class="board" id="board"></div>
-  </section>
 
   <section class="panel">
     <div class="seg-wrap">
@@ -126,9 +94,9 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
     <div class="row">
       <button class="btn" id="btnNew">Новая партия</button>
       <button class="btn" id="btnUndo">Отменить ход</button>
-      <button class="btn" id="btnHint">Подсказка сейчас</button>
-      <button class="btn" id="btnSync">Запомнить кадр</button>
-      <button class="btn" id="btnFen">Задать позицию</button>
+      <button class="btn" id="btnHint">Пересчитать ход</button>
+      <button class="btn" id="btnSync">Сбросить кадр</button>
+      <button class="btn" id="btnFen">FEN</button>
     </div>
   </section>
 
@@ -496,10 +464,10 @@ function changedSquares(d, cfg) {
 
 const $ = id => document.getElementById(id);
 const CFG = {
-  N: 6, W: 640, tickMs: 160,
-  moveT: 0.11, calmT: 0.032, stable: 2,
-  tcMin: 0.032, minScore: 0.95, minMargin: 0.35,
-  engineMs: 1200, autoSyncMs: 4500
+  N: 6, W: 640, tickMs: 150,
+  moveT: 0.115, calmT: 0.032, stable: 2,
+  tcMin: 0.032, minScore: 0.9, minMargin: 0.3,
+  engineMs: 1100, autoSyncMs: 4000
 };
 
 const NAMES = { K: 'Король', Q: 'Ферзь', R: 'Ладья', B: 'Слон', N: 'Конь', P: 'Пешка' };
@@ -507,7 +475,6 @@ const LET = { K: 'Кр', Q: 'Ф', R: 'Л', B: 'С', N: 'К', P: '' };
 const SOLID = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟︎' };
 const PROMO_NAME = { q: 'ферзя', r: 'ладью', b: 'слона', n: 'коня' };
 
-/* ---------- состояние ---------- */
 let st = parseFen(START_FEN);
 let hist = [];
 let last = null;
@@ -518,7 +485,6 @@ let camOn = false, calibMode = false, calibTaps = [];
 let fRef = null, fPrev = null, stable = 0, needSync = true;
 let lastAmbiguousAt = 0;
 let hint = null, hintState = 'idle';
-let sel = -1;
 let cands = [], candSig = '';
 let CW = 0, CH = 0;
 let stream = null;
@@ -529,7 +495,6 @@ const vctx = view.getContext('2d');
 const grab = document.createElement('canvas');
 const gctx = grab.getContext('2d', { willReadFrequently: true });
 
-/* ---------- настройки ---------- */
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('cc_settings') || 'null');
@@ -548,7 +513,6 @@ function rebuildH() {
   try { H = makeH(ptsN.map(p => [p[0] * CW, p[1] * CH])); } catch (e) { H = null; }
 }
 
-/* ---------- текст ---------- */
 function ruMoves(n) {
   const a = n % 10, b = n % 100;
   if (a === 1 && b !== 11) return n + ' ход';
@@ -584,56 +548,26 @@ function evalLine(h) {
   if (!sc) return { text: '', cls: '' };
   if (sc.type === 'mate') {
     const n = Math.abs(sc.value);
-    if (sc.value > 0) return { text: h.forUser ? 'Можно поставить мат за ' + ruMoves(n) + '.' : 'Сопернику доступен мат за ' + ruMoves(n) + '.', cls: h.forUser ? 'good' : 'warn' };
-    return { text: h.forUser ? 'Тебе грозит мат за ' + ruMoves(n) + '. Этот ход — лучшая защита.' : 'Сопернику грозит мат за ' + ruMoves(n) + '.', cls: h.forUser ? 'warn' : 'good' };
+    if (sc.value > 0) return { text: 'Мат за ' + ruMoves(n), cls: 'good' };
+    return { text: 'Грозит мат за ' + ruMoves(n), cls: 'warn' };
   }
   const p = sc.value / 100;
   const u = h.forUser ? p : -p;
   let t;
-  if (u >= 1.5) t = 'У тебя заметный перевес';
-  else if (u >= 0.5) t = 'У тебя небольшое преимущество';
-  else if (u > -0.5) t = 'Позиция примерно равная';
-  else if (u > -1.5) t = 'У соперника небольшое преимущество';
-  else t = 'У соперника заметный перевес';
-  return { text: t + ' (' + (u > 0 ? '+' : '') + u.toFixed(1) + ')', cls: '' };
+  if (u >= 1.5) t = 'Сильный перевес';
+  else if (u >= 0.5) t = 'Небольшой плюс';
+  else if (u > -0.5) t = 'Равная позиция';
+  else if (u > -1.5) t = 'Небольшой минус';
+  else t = 'Соперник впереди';
+  return { text: t + ' (' + (u > 0 ? '+' : '') + u.toFixed(1) + ')', cls: u >= 0.5 ? 'good' : (u <= -1.0 ? 'warn' : '') };
 }
 
-/* ---------- отрисовка интерфейса ---------- */
 function setStat(t) { $('camStat').textContent = t; }
 function setStage(t) {
   const el = $('stageMsg');
   if (t) { el.textContent = t; el.hidden = false; } else { el.hidden = true; }
 }
-
 function hintValid() { return hint && hint.fen === toFen(st); }
-
-function renderBoard() {
-  const flip = userSide === 'b';
-  const targets = new Set();
-  if (sel >= 0) for (const m of legalMoves(st)) if (m.from === sel) targets.add(m.to);
-  const chkSq = inCheck(st) ? st.board.indexOf(st.turn === 'w' ? 'K' : 'k') : -1;
-  const showHint = hintState === 'ready' && hintValid();
-  let html = '';
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const f = flip ? 7 - col : col;
-      const r = flip ? row : 7 - row;
-      const sq = r * 8 + f;
-      const p = st.board[sq];
-      let cls = 'cell ' + (((f + r) % 2 === 1) ? 'l' : 'd');
-      if (last && (sq === last.from || sq === last.to)) cls += ' last';
-      if (showHint && sq === hint.move.from) cls += ' hf';
-      if (showHint && sq === hint.move.to) cls += ' ht';
-      if (sq === sel) cls += ' sel';
-      if (targets.has(sq)) cls += ' dot';
-      if (sq === chkSq) cls += ' chk';
-      const glyph = p ? '<span class="pc ' + (isWhite(p) ? 'w' : 'b') + '">' + SOLID[p.toUpperCase()] + '</span>' : '';
-      const co = (col === 0 ? '<span class="rk">' + (r + 1) + '</span>' : '') + (row === 7 ? '<span class="fl">' + FILES[f] + '</span>' : '');
-      html += '<div class="' + cls + '" data-sq="' + sq + '">' + co + glyph + '</div>';
-    }
-  }
-  $('board').innerHTML = html;
-}
 
 function renderHint() {
   const el = $('hint');
@@ -642,30 +576,30 @@ function renderHint() {
   if (s === 'mate') {
     const winner = st.turn === 'w' ? 'b' : 'w';
     const won = winner === userSide;
-    html = '<p class="hint-main">Мат. ' + (winner === 'w' ? 'Победили белые.' : 'Победили чёрные.') + '</p>' +
-      '<p class="hint-line ' + (won ? 'good' : 'warn') + '">' + (won ? 'Ты выиграл!' : 'В этот раз не вышло. Нажми «Новая партия».') + '</p>';
+    html = '<p class="hint-main">Мат. ' + (winner === 'w' ? 'Белые победили.' : 'Чёрные победили.') + '</p>' +
+      '<p class="hint-line ' + (won ? 'good' : 'warn') + '">' + (won ? 'Победа!' : 'Поражение. Нажми «Новая партия».') + '</p>';
   } else if (s === 'stalemate') {
-    html = '<p class="hint-main">Пат</p><p class="hint-line">Ничья: у стороны на ходу нет ходов, но шаха нет.</p>';
+    html = '<p class="hint-main">Пат</p><p class="hint-line">Ничья.</p>';
   } else if (s === 'draw') {
-    html = '<p class="hint-main">Ничья</p><p class="hint-line">Прошло 50 ходов без взятий и ходов пешками.</p>';
+    html = '<p class="hint-main">Ничья</p><p class="hint-line">Правило 50 ходов.</p>';
   } else if (hintState === 'noengine') {
-    html = '<p class="hint-title">Подсказки</p><p class="hint-main small">Движок не загрузился</p>' +
-      '<p class="hint-line muted">Доска и камера работают, но лучшие ходы считать нечем. Проверь интернет и перезапусти приложение.</p>';
+    html = '<p class="hint-title">Подсказка</p><p class="hint-main small">Движок не загружен</p>' +
+      '<p class="hint-line muted">Проверь интернет и перезапусти.</p>';
+  } else if (st.turn !== userSide) {
+    html = '<p class="hint-title">Ход соперника</p><p class="hint-main small">Слежу за доской…</p>' +
+      '<p class="hint-line muted">Как только соперник сходит, покажу твой лучший ход.</p>';
   } else if (hintState === 'thinking') {
-    html = '<p class="hint-title">' + (st.turn === userSide ? 'Твой ход' : 'Ход соперника') + '</p><p class="hint-main small">Считаю лучший ход…</p>';
-  } else if (hintState === 'ready' && hintValid()) {
+    html = '<p class="hint-title">Твой лучший ход</p><p class="hint-main small">Считаю…</p>';
+  } else if (hintState === 'ready' && hintValid() && hint.forUser) {
     const ev = evalLine(hint);
     const chk = getStatus(st) === 'check';
-    html = '<p class="hint-title">' + (hint.forUser ? 'Ходи так' : 'Лучший ход соперника') + '</p>' +
+    html = '<p class="hint-title">Твой лучший ход</p>' +
       '<p class="hint-main">' + hintTitle(st, hint.move) + '</p>' +
-      (chk && hint.forUser ? '<p class="hint-line warn">Тебе шах: нужно защитить короля.</p>' : '') +
+      (chk ? '<p class="hint-line warn">Шах — защити короля.</p>' : '') +
       (ev.text ? '<p class="hint-line ' + ev.cls + '">' + ev.text + '</p>' : '') +
-      (hint.pv && hint.pv.length > 1 ? '<p class="hint-line muted">Дальше: ' + pvText(st, hint.pv) + '</p>' : '');
-  } else if (st.turn !== userSide) {
-    html = '<p class="hint-title">Ход соперника</p><p class="hint-main small">Жду, когда ' + (st.turn === 'w' ? 'белые' : 'чёрные') + ' сходят</p>' +
-      '<p class="hint-line muted">Подсказка появится на твоём ходу. Нужна сейчас — нажми «Подсказка сейчас».</p>';
+      (hint.pv && hint.pv.length > 1 ? '<p class="hint-line muted">Вариант: ' + pvText(st, hint.pv) + '</p>' : '');
   } else {
-    html = '<p class="hint-title">Твой ход</p><p class="hint-main small">Подсказка скоро появится</p>';
+    html = '<p class="hint-title">Твой ход</p><p class="hint-main small">Готовлю подсказку…</p>';
   }
   el.innerHTML = html;
 }
@@ -676,7 +610,7 @@ function renderCands() {
   if (sig === candSig) return;
   candSig = sig;
   if (!cands.length) { el.hidden = true; el.innerHTML = ''; return; }
-  let html = '<p class="cands-title">Не уверена, какой ход был сделан. Выбери:</p><div class="cands-list">';
+  let html = '<p class="cands-title">Уточни ход, если нужно:</p><div class="cands-list">';
   cands.forEach((m, i) => { html += '<button class="btn" data-i="' + i + '">' + describeMove(st, m) + '</button>'; });
   html += '</div>';
   el.innerHTML = html;
@@ -698,18 +632,17 @@ function renderMoves() {
 function renderSide() {
   $('sideW').setAttribute('aria-pressed', userSide === 'w' ? 'true' : 'false');
   $('sideB').setAttribute('aria-pressed', userSide === 'b' ? 'true' : 'false');
-  $('btnToggleAR').textContent = 'Фигуры: ' + (showAR ? 'ВКЛ' : 'ВЫКЛ');
+  $('btnToggleAR').textContent = 'AR фигуры: ' + (showAR ? 'ВКЛ' : 'ВЫКЛ');
 }
 
 function renderAll() {
-  renderBoard(); renderHint(); renderCands(); renderMoves(); renderSide();
+  renderHint(); renderCands(); renderMoves(); renderSide();
 }
 
-/* ---------- ходы ---------- */
 function commitMove(m, feat) {
   hist.push({ before: st, move: m, text: describeMove(st, m) });
   st = applyMove(st, m);
-  last = m; sel = -1; cands = []; hint = null; hintState = 'idle';
+  last = m; cands = []; hint = null; hintState = 'idle';
   lastAmbiguousAt = 0;
   if (feat) { fRef = feat; needSync = false; } else { needSync = true; }
   renderAll();
@@ -719,7 +652,8 @@ function commitMove(m, feat) {
 function afterMove() {
   const s = getStatus(st);
   if (s === 'mate' || s === 'stalemate' || s === 'draw') { renderAll(); return; }
-  requestHint();
+  if (st.turn === userSide) requestHint();
+  else renderAll();
 }
 
 function undoMove() {
@@ -727,7 +661,7 @@ function undoMove() {
   const e = hist.pop();
   st = e.before;
   last = hist.length ? hist[hist.length - 1].move : null;
-  sel = -1; cands = []; hint = null; hintState = 'idle';
+  cands = []; hint = null; hintState = 'idle';
   lastAmbiguousAt = 0;
   needSync = true;
   renderAll();
@@ -736,29 +670,12 @@ function undoMove() {
 
 function newGame() {
   st = parseFen(START_FEN);
-  hist = []; last = null; sel = -1; cands = []; hint = null; hintState = 'idle';
+  hist = []; last = null; cands = []; hint = null; hintState = 'idle';
   lastAmbiguousAt = 0;
   needSync = true;
   renderAll();
   afterMove();
 }
-
-$('board').addEventListener('click', ev => {
-  const el = ev.target.closest('[data-sq]');
-  if (!el) return;
-  const sq = +el.getAttribute('data-sq');
-  const mine = p => p && isWhite(p) === (st.turn === 'w');
-  if (getStatus(st) === 'mate' || getStatus(st) === 'stalemate') return;
-  if (sel < 0) {
-    if (mine(st.board[sq])) { sel = sq; renderBoard(); }
-    return;
-  }
-  if (sq === sel) { sel = -1; renderBoard(); return; }
-  const m = legalMoves(st).find(x => x.from === sel && x.to === sq && (!x.promo || x.promo === 'q'));
-  if (m) { commitMove(m, null); return; }
-  sel = mine(st.board[sq]) ? sq : -1;
-  renderBoard();
-});
 
 $('cands').addEventListener('click', ev => {
   const b = ev.target.closest('button[data-i]');
@@ -856,21 +773,21 @@ async function initEngine() {
 
 async function requestHint() {
   if (!E.w) { hintState = 'noengine'; renderAll(); return; }
+  if (st.turn !== userSide) return;
   const fen = toFen(st);
-  const forUser = st.turn === userSide;
   hintState = 'thinking';
   renderAll();
   const r = await analyze(fen, CFG.engineMs);
   if (!r) return;
-  if (toFen(st) !== fen) return;
+  if (toFen(st) !== fen || st.turn !== userSide) return;
   const m = (!r.best || r.best === '(none)') ? null : uciToMove(st, r.best);
   if (!m) { hintState = 'idle'; renderAll(); return; }
-  hint = { move: m, score: r.score, pv: r.pv, fen, forUser };
+  hint = { move: m, score: r.score, pv: r.pv, fen, forUser: true };
   hintState = 'ready';
   renderAll();
 }
 
-/* ---------- камера ---------- */
+/* ---------- камера и AR-отрисовка ---------- */
 function waitVideo() {
   return new Promise(resolve => {
     if (video.videoWidth) { resolve(); return; }
@@ -881,7 +798,7 @@ function waitVideo() {
 
 async function startCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    setStat('Камера недоступна. Открой приложение, установленное из APK, а не файл в браузере.');
+    setStat('Камера недоступна.');
     return;
   }
   try {
@@ -895,14 +812,13 @@ async function startCamera() {
       audio: false
     });
     video.srcObject = stream;
-
     try {
       const track = stream.getVideoTracks()[0];
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
       if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
         await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
       }
-    } catch (e) { /* игнорируем усыпление камеры */ }
+    } catch (e) { /* игнорируем */ }
 
     await video.play();
     await waitVideo();
@@ -916,19 +832,19 @@ async function startCamera() {
     $('btnCalib').disabled = false; $('btnRot').disabled = false; $('btnToggleAR').disabled = false;
     rebuildH();
     needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
-    if (H) { setStage(''); setStat('Камера работает, сетка с прошлого раза. Если доска сдвинулась, нажми «Разметить доску».'); }
-    else { setStage('Нажми «Разметить доску»'); setStat('Камера работает. Теперь отметь углы доски.'); }
+    if (H) { setStage(''); setStat('Камера запущена. Слежу за партией автоматически.'); }
+    else { setStage('Нажми «Разметить доску»'); setStat('Камера запущена. Отметь 4 угла доски.'); }
     try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {}); } catch (e) { /* ничего */ }
   } catch (err) {
     const n = (err && err.name) ? err.name : String(err);
-    setStat('Нет доступа к камере (' + n + '). Разреши камеру для приложения в настройках телефона и попробуй снова.');
+    setStat('Ошибка камеры (' + n + '). Проверь разрешения.');
   }
 }
 
 function startCalib() {
   if (!camOn) return;
   calibMode = true; calibTaps = [];
-  setStage('Нажми на 4 угла доски: левый нижний, правый нижний, правый верхний, левый верхний (как на экране)');
+  setStage('Нажми 4 угла доски: левый нижний, правый нижний, правый верхний, левый верхний');
   setStat('Отмечено углов: 0 из 4.');
 }
 
@@ -946,14 +862,33 @@ view.addEventListener('click', ev => {
     calibMode = false;
     needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
     setStage('');
-    setStat('Сетка готова. Проверь: подпись a1 должна быть в углу слева от белых. Если нет, жми «Повернуть сетку». Потом «Новая партия».');
+    setStat('Сетка настроена. Подпись a1 должна быть слева снизу от белых.');
   }
 });
 
+function drawSquareBadge(sq, sym, whitePiece) {
+  const uv = squareUV(sq & 7, sq >> 3, userSide, rot);
+  const center = applyH(H, uv[0] + 0.5 / 8, uv[1] + 0.5 / 8);
+
+  vctx.beginPath();
+  vctx.arc(center[0], center[1], 13, 0, Math.PI * 2);
+  vctx.fillStyle = whitePiece ? 'rgba(255, 255, 255, 0.88)' : 'rgba(16, 22, 28, 0.88)';
+  vctx.fill();
+  vctx.lineWidth = 2;
+  vctx.strokeStyle = whitePiece ? 'rgba(16, 22, 28, 0.95)' : 'rgba(245, 184, 61, 0.95)';
+  vctx.stroke();
+
+  vctx.font = 'bold 19px system-ui, sans-serif';
+  vctx.textAlign = 'center';
+  vctx.textBaseline = 'middle';
+  vctx.fillStyle = whitePiece ? '#10161C' : '#FFFFFF';
+  vctx.fillText(sym, center[0], center[1] + 0.5);
+}
+
 function drawOverlay() {
   if (H) {
-    vctx.lineWidth = 1.5;
-    vctx.strokeStyle = 'rgba(245,184,61,.85)';
+    vctx.lineWidth = 1.4;
+    vctx.strokeStyle = 'rgba(245,184,61,.78)';
     vctx.beginPath();
     for (let i = 0; i <= 8; i++) {
       const a = applyH(H, i / 8, 0), b = applyH(H, i / 8, 1);
@@ -963,27 +898,36 @@ function drawOverlay() {
     }
     vctx.stroke();
 
-    const showHint = hintState === 'ready' && hintValid();
+    if (showAR) {
+      for (let sq = 0; sq < 64; sq++) {
+        const p = st.board[sq];
+        if (!p) continue;
+        drawSquareBadge(sq, SOLID[p.toUpperCase()], isWhite(p));
+      }
+    }
+
+    const showHint = hintState === 'ready' && hintValid() && hint.forUser && st.turn === userSide;
     if (showHint && hint && hint.move) {
       const m = hint.move;
       const uvFrom = squareUV(m.from & 7, m.from >> 3, userSide, rot);
       const uvTo = squareUV(m.to & 7, m.to >> 3, userSide, rot);
-
       const pFrom = applyH(H, uvFrom[0] + 0.5 / 8, uvFrom[1] + 0.5 / 8);
       const pTo = applyH(H, uvTo[0] + 0.5 / 8, uvTo[1] + 0.5 / 8);
 
-      vctx.fillStyle = hint.forUser ? 'rgba(76, 195, 138, 0.45)' : 'rgba(255, 122, 107, 0.45)';
-      vctx.strokeStyle = hint.forUser ? '#4CC38A' : '#FF7A6B';
+      vctx.fillStyle = 'rgba(63, 208, 138, 0.35)';
+      vctx.strokeStyle = '#3FD08A';
       vctx.lineWidth = 3;
+      vctx.beginPath(); vctx.arc(pFrom[0], pFrom[1], 19, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
 
-      vctx.beginPath(); vctx.arc(pFrom[0], pFrom[1], 18, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
-      vctx.beginPath(); vctx.arc(pTo[0], pTo[1], 18, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
+      vctx.fillStyle = 'rgba(245, 184, 61, 0.42)';
+      vctx.strokeStyle = '#F5B83D';
+      vctx.lineWidth = 3;
+      vctx.beginPath(); vctx.arc(pTo[0], pTo[1], 19, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
 
       const angle = Math.atan2(pTo[1] - pFrom[1], pTo[0] - pFrom[0]);
       vctx.lineWidth = 5;
       vctx.strokeStyle = '#F5B83D';
       vctx.fillStyle = '#F5B83D';
-
       vctx.beginPath();
       vctx.moveTo(pFrom[0], pFrom[1]);
       vctx.lineTo(pTo[0], pTo[1]);
@@ -999,46 +943,22 @@ function drawOverlay() {
 
       const label = sqName(m.from) + '→' + sqName(m.to);
       const midX = (pFrom[0] + pTo[0]) * 0.5;
-      const midY = (pFrom[1] + pTo[1]) * 0.5 - 12;
-      vctx.font = 'bold 15px system-ui, sans-serif';
+      const midY = (pFrom[1] + pTo[1]) * 0.5 - 14;
+      vctx.font = 'bold 16px system-ui, sans-serif';
       vctx.textAlign = 'center';
       vctx.textBaseline = 'middle';
-      vctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      vctx.strokeStyle = 'rgba(0,0,0,0.92)';
       vctx.lineWidth = 4;
       vctx.strokeText(label, midX, midY);
-      vctx.fillStyle = '#FFF3C4';
+      vctx.fillStyle = '#FFFFFF';
       vctx.fillText(label, midX, midY);
     }
 
-    if (showAR) {
-      vctx.font = 'bold 22px system-ui, sans-serif';
-      vctx.textAlign = 'center';
-      vctx.textBaseline = 'middle';
-
-      for (let sq = 0; sq < 64; sq++) {
-        const p = st.board[sq];
-        if (!p) continue;
-
-        const uv = squareUV(sq & 7, sq >> 3, userSide, rot);
-        const center = applyH(H, uv[0] + 0.5 / 8, uv[1] + 0.5 / 8);
-
-        const sym = SOLID[p.toUpperCase()];
-        const whitePiece = isWhite(p);
-
-        vctx.strokeStyle = whitePiece ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-        vctx.lineWidth = 3.5;
-        vctx.strokeText(sym, center[0], center[1]);
-
-        vctx.fillStyle = whitePiece ? '#FFFFFF' : '#10161C';
-        vctx.fillText(sym, center[0], center[1]);
-      }
-    }
-
-    vctx.font = 'bold 15px system-ui,sans-serif';
+    vctx.font = 'bold 14px system-ui,sans-serif';
     vctx.textAlign = 'left';
     vctx.textBaseline = 'alphabetic';
     vctx.fillStyle = '#fff';
-    vctx.strokeStyle = 'rgba(0,0,0,.8)';
+    vctx.strokeStyle = 'rgba(0,0,0,.85)';
     vctx.lineWidth = 3;
     for (const sq of [0, 63]) {
       const uv = squareUV(sq & 7, sq >> 3, userSide, rot);
@@ -1072,7 +992,6 @@ function drawLoop() {
   } catch (e) { /* кадр ещё не готов */ }
 }
 
-/* ---------- слежение за ходами ---------- */
 function tick() {
   if (!camOn || !H || calibMode || video.readyState < 2) return;
   let img;
@@ -1087,14 +1006,14 @@ function tick() {
   fPrev = feat;
   let mx = 0;
   for (let i = 0; i < 64; i++) if (dp[i] > mx) mx = dp[i];
-  if (mx > CFG.moveT) { stable = 0; setStat('Вижу движение…'); return; }
+  if (mx > CFG.moveT) { stable = 0; setStat('Движение…'); return; }
   stable++;
   if (stable < CFG.stable) return;
 
   if (needSync || !fRef) {
     fRef = feat; needSync = false; lastAmbiguousAt = 0;
     if (cands.length) { cands = []; renderCands(); }
-    setStat('Кадр запомнен. Слежу за партией…');
+    setStat('Кадр обновлён. Слежу за партией…');
     return;
   }
   const s = getStatus(st);
@@ -1106,7 +1025,7 @@ function tick() {
   if (md < CFG.calmT) {
     fRef = feat; lastAmbiguousAt = 0;
     if (cands.length) { cands = []; renderCands(); }
-    setStat('Слежу за партией…');
+    setStat(st.turn === userSide ? 'Твой ход — смотри стрелку на камере' : 'Жду ход соперника…');
     return;
   }
   const rank = rankMoves(st, d, CFG);
@@ -1114,7 +1033,7 @@ function tick() {
   const best = rank[0], second = rank[1];
   const margin = second ? best.score - second.score : best.score;
   if (best.score >= CFG.minScore && margin >= CFG.minMargin) {
-    setStat('Ход: ' + describeMove(st, best.move));
+    setStat('Ход зафиксирован: ' + describeMove(st, best.move));
     commitMove(best.move, feat);
   } else {
     const now = Date.now();
@@ -1124,23 +1043,22 @@ function tick() {
       lastAmbiguousAt = 0;
       cands = [];
       renderCands();
-      setStat('Автоподстройка кадра под позицию. Слежу дальше…');
+      setStat('Автоподстройка кадра под доску.');
       return;
     }
     const names = changedSquares(d, CFG).slice(0, 6).map(sqName).join(', ');
     cands = rank.filter(r => r.score >= 0.45).slice(0, 3).map(r => r.move);
     renderCands();
-    setStat('Уточняю ход (' + (names || '—') + ')…');
+    setStat('Сверка клеток: ' + (names || '—'));
   }
 }
 
-/* ---------- кнопки ---------- */
 $('btnCam').addEventListener('click', startCamera);
 $('btnCalib').addEventListener('click', startCalib);
 $('btnRot').addEventListener('click', () => {
   rot = (rot + 1) % 4; saveSettings();
   needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
-  setStat('Сетка повёрнута. Проверь подписи a1 и h8 на картинке.');
+  setStat('Сетка повёрнута.');
 });
 $('btnToggleAR').addEventListener('click', () => {
   showAR = !showAR; saveSettings();
@@ -1150,15 +1068,15 @@ function setSide(s) {
   if (s === userSide) return;
   userSide = s; saveSettings();
   needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
-  hint = null; hintState = 'idle'; sel = -1;
+  hint = null; hintState = 'idle';
   renderAll(); afterMove();
 }
 $('sideW').addEventListener('click', () => setSide('w'));
 $('sideB').addEventListener('click', () => setSide('b'));
 $('btnNew').addEventListener('click', () => {
-  if (hist.length && !confirm('Начать новую партию? Фигуры на доске должны стоять в начальной позиции.')) return;
+  if (hist.length && !confirm('Начать новую партию?')) return;
   newGame();
-  setStat(camOn ? 'Новая партия. Слежу за ходами автоматически.' : 'Новая партия.');
+  setStat(camOn ? 'Новая партия. Слежу за доской.' : 'Новая партия.');
 });
 $('btnUndo').addEventListener('click', undoMove);
 $('btnHint').addEventListener('click', () => {
@@ -1168,24 +1086,23 @@ $('btnHint').addEventListener('click', () => {
 });
 $('btnSync').addEventListener('click', () => {
   needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
-  setStat(camOn ? 'Подстраиваю кадр под текущую доску…' : 'Сначала включи камеру.');
+  setStat(camOn ? 'Подстраиваю кадр…' : 'Сначала включи камеру.');
 });
 $('btnFen').addEventListener('click', () => {
-  const f = prompt('Вставь позицию в формате FEN (после неё партия пойдёт с этого места):');
+  const f = prompt('Вставь FEN:');
   if (!f) return;
   try {
     const n = parseFen(f);
     if (n.board.indexOf('K') < 0 || n.board.indexOf('k') < 0) throw new Error('no king');
-    st = n; hist = []; last = null; sel = -1; cands = []; hint = null; hintState = 'idle';
+    st = n; hist = []; last = null; cands = []; hint = null; hintState = 'idle';
     lastAmbiguousAt = 0;
     needSync = true;
     renderAll(); afterMove();
   } catch (e) {
-    alert('Не получилось прочитать позицию. Проверь, что это FEN.');
+    alert('Неверный FEN.');
   }
 });
 
-/* ---------- запуск ---------- */
 loadSettings();
 renderAll();
 setInterval(tick, CFG.tickMs);
