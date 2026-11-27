@@ -45,6 +45,9 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
 .hint-line.warn{color:var(--bad);font-weight:600}
 .hint-line.good{color:var(--ok);font-weight:600}
 .hint-line.muted{color:var(--muted);font-size:13px}
+.ai-box{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:14px;color:var(--text)}
+.ai-tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--accent);margin-right:6px}
 .cands-title{font-size:14px;color:var(--muted);margin:0 0 8px}
 .cands-list{display:flex;flex-wrap:wrap;gap:8px}
 .moves{font-size:14px;line-height:1.7;max-height:120px;overflow:auto;color:var(--text)}
@@ -97,6 +100,10 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
       <button class="btn" id="btnHint">Пересчитать ход</button>
       <button class="btn" id="btnSync">Сбросить кадр</button>
       <button class="btn" id="btnFen">FEN</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnToggleAI">DeepSeek: ВКЛ</button>
+      <button class="btn" id="btnAiKey">API ключ</button>
     </div>
   </section>
 
@@ -344,7 +351,6 @@ function moveSquares(m, white) {
   return e;
 }
 
-/* ---- геометрия и сравнение кадров ---- */
 function makeH(p) {
   const x0 = p[0][0], y0 = p[0][1], x1 = p[1][0], y1 = p[1][1];
   const x2 = p[2][0], y2 = p[2][1], x3 = p[3][0], y3 = p[3][1];
@@ -467,7 +473,10 @@ const CFG = {
   N: 6, W: 640, tickMs: 150,
   moveT: 0.115, calmT: 0.032, stable: 2,
   tcMin: 0.032, minScore: 0.9, minMargin: 0.3,
-  engineMs: 1100, autoSyncMs: 4000
+  engineMs: 1100, autoSyncMs: 4000,
+  dsUrl: 'https://api.deepseek.com/chat/completions',
+  dsModel: 'deepseek-chat',
+  defaultKey: 'sk-bf711692c76b443abc87c048bd36f30e'
 };
 
 const NAMES = { K: 'Король', Q: 'Ферзь', R: 'Ладья', B: 'Слон', N: 'Конь', P: 'Пешка' };
@@ -489,6 +498,10 @@ let cands = [], candSig = '';
 let CW = 0, CH = 0;
 let stream = null;
 let showAR = true;
+let aiOn = true;
+let aiKey = CFG.defaultKey;
+let aiNote = '';
+let aiReqId = 0;
 
 const video = $('video'), view = $('view');
 const vctx = view.getContext('2d');
@@ -498,15 +511,22 @@ const gctx = grab.getContext('2d', { willReadFrequently: true });
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('cc_settings') || 'null');
-    if (!s) return;
-    if (s.side === 'w' || s.side === 'b') userSide = s.side;
-    if (Number.isInteger(s.rot)) rot = ((s.rot % 4) + 4) % 4;
-    if (Array.isArray(s.pts) && s.pts.length === 4) ptsN = s.pts;
-    if (typeof s.showAR === 'boolean') showAR = s.showAR;
+    if (s) {
+      if (s.side === 'w' || s.side === 'b') userSide = s.side;
+      if (Number.isInteger(s.rot)) rot = ((s.rot % 4) + 4) % 4;
+      if (Array.isArray(s.pts) && s.pts.length === 4) ptsN = s.pts;
+      if (typeof s.showAR === 'boolean') showAR = s.showAR;
+      if (typeof s.aiOn === 'boolean') aiOn = s.aiOn;
+      if (typeof s.aiKey === 'string' && s.aiKey.trim()) aiKey = s.aiKey.trim();
+    }
   } catch (e) { /* ничего */ }
 }
 function saveSettings() {
-  try { localStorage.setItem('cc_settings', JSON.stringify({ side: userSide, rot: rot, pts: ptsN, showAR })); } catch (e) { /* ничего */ }
+  try {
+    localStorage.setItem('cc_settings', JSON.stringify({
+      side: userSide, rot, pts: ptsN, showAR, aiOn, aiKey
+    }));
+  } catch (e) { /* ничего */ }
 }
 function rebuildH() {
   if (!ptsN || !CW) { H = null; return; }
@@ -562,6 +582,54 @@ function evalLine(h) {
   return { text: t + ' (' + (u > 0 ? '+' : '') + u.toFixed(1) + ')', cls: u >= 0.5 ? 'good' : (u <= -1.0 ? 'warn' : '') };
 }
 
+async function explainWithDeepSeek(fen, moveStr, evalStr, pvStr) {
+  if (!aiOn || !aiKey) return;
+  const reqId = ++aiReqId;
+  aiNote = 'думаю над идеей хода…';
+  renderHint();
+
+  const prompt = [
+    'Ты краткий шахматный тренер во время живой партии.',
+    'FEN: ' + fen,
+    'Сторона игрока: ' + (userSide === 'w' ? 'белые' : 'чёрные'),
+    'Лучший ход движка: ' + moveStr,
+    evalStr ? 'Оценка: ' + evalStr : '',
+    pvStr ? 'Линия: ' + pvStr : '',
+    'Объясни в 1 коротком предложении (до 18 слов), зачем делать этот ход и чего он избегает или добивается.'
+  ].filter(Boolean).join('\n');
+
+  try {
+    const res = await fetch(CFG.dsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + aiKey
+      },
+      body: JSON.stringify({
+        model: CFG.dsModel,
+        messages: [
+          { role: 'system', content: 'Отвечай только по-русски, кратко и по делу.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 90
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const txt = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
+      ? data.choices[0].message.content.trim()
+      : '';
+    if (reqId !== aiReqId || toFen(st) !== fen) return;
+    aiNote = txt || 'не удалось получить ответ от DeepSeek';
+    renderHint();
+  } catch (e) {
+    if (reqId !== aiReqId || toFen(st) !== fen) return;
+    aiNote = 'ошибка DeepSeek (' + (e && e.message ? e.message : 'сеть') + ')';
+    renderHint();
+  }
+}
+
 function setStat(t) { $('camStat').textContent = t; }
 function setStage(t) {
   const el = $('stageMsg');
@@ -597,7 +665,8 @@ function renderHint() {
       '<p class="hint-main">' + hintTitle(st, hint.move) + '</p>' +
       (chk ? '<p class="hint-line warn">Шах — защити короля.</p>' : '') +
       (ev.text ? '<p class="hint-line ' + ev.cls + '">' + ev.text + '</p>' : '') +
-      (hint.pv && hint.pv.length > 1 ? '<p class="hint-line muted">Вариант: ' + pvText(st, hint.pv) + '</p>' : '');
+      (hint.pv && hint.pv.length > 1 ? '<p class="hint-line muted">Вариант: ' + pvText(st, hint.pv) + '</p>' : '') +
+      (aiOn && aiNote ? '<div class="ai-box"><span class="ai-tag">DeepSeek</span>' + aiNote + '</div>' : '');
   } else {
     html = '<p class="hint-title">Твой ход</p><p class="hint-main small">Готовлю подсказку…</p>';
   }
@@ -633,6 +702,7 @@ function renderSide() {
   $('sideW').setAttribute('aria-pressed', userSide === 'w' ? 'true' : 'false');
   $('sideB').setAttribute('aria-pressed', userSide === 'b' ? 'true' : 'false');
   $('btnToggleAR').textContent = 'AR фигуры: ' + (showAR ? 'ВКЛ' : 'ВЫКЛ');
+  $('btnToggleAI').textContent = 'DeepSeek: ' + (aiOn ? 'ВКЛ' : 'ВЫКЛ');
 }
 
 function renderAll() {
@@ -642,7 +712,7 @@ function renderAll() {
 function commitMove(m, feat) {
   hist.push({ before: st, move: m, text: describeMove(st, m) });
   st = applyMove(st, m);
-  last = m; cands = []; hint = null; hintState = 'idle';
+  last = m; cands = []; hint = null; hintState = 'idle'; aiNote = ''; aiReqId++;
   lastAmbiguousAt = 0;
   if (feat) { fRef = feat; needSync = false; } else { needSync = true; }
   renderAll();
@@ -661,7 +731,7 @@ function undoMove() {
   const e = hist.pop();
   st = e.before;
   last = hist.length ? hist[hist.length - 1].move : null;
-  cands = []; hint = null; hintState = 'idle';
+  cands = []; hint = null; hintState = 'idle'; aiNote = ''; aiReqId++;
   lastAmbiguousAt = 0;
   needSync = true;
   renderAll();
@@ -670,7 +740,7 @@ function undoMove() {
 
 function newGame() {
   st = parseFen(START_FEN);
-  hist = []; last = null; cands = []; hint = null; hintState = 'idle';
+  hist = []; last = null; cands = []; hint = null; hintState = 'idle'; aiNote = ''; aiReqId++;
   lastAmbiguousAt = 0;
   needSync = true;
   renderAll();
@@ -684,7 +754,6 @@ $('cands').addEventListener('click', ev => {
   if (m) commitMove(m, null);
 });
 
-/* ---------- движок ---------- */
 const E = { w: null, busy: false, pending: null, cur: null };
 
 function engineMsg(ev) {
@@ -776,6 +845,7 @@ async function requestHint() {
   if (st.turn !== userSide) return;
   const fen = toFen(st);
   hintState = 'thinking';
+  aiNote = '';
   renderAll();
   const r = await analyze(fen, CFG.engineMs);
   if (!r) return;
@@ -785,9 +855,13 @@ async function requestHint() {
   hint = { move: m, score: r.score, pv: r.pv, fen, forUser: true };
   hintState = 'ready';
   renderAll();
+
+  const ev = evalLine(hint);
+  const lineText = hintTitle(st, m) + ' (' + describeMove(st, m) + ')';
+  const pvStr = hint.pv && hint.pv.length > 1 ? pvText(st, hint.pv) : '';
+  explainWithDeepSeek(fen, lineText, ev.text, pvStr);
 }
 
-/* ---------- камера и AR-отрисовка ---------- */
 function waitVideo() {
   return new Promise(resolve => {
     if (video.videoWidth) { resolve(); return; }
@@ -1064,11 +1138,30 @@ $('btnToggleAR').addEventListener('click', () => {
   showAR = !showAR; saveSettings();
   renderSide();
 });
+$('btnToggleAI').addEventListener('click', () => {
+  aiOn = !aiOn;
+  if (!aiOn) aiNote = '';
+  saveSettings();
+  renderSide();
+  renderHint();
+  if (aiOn && hintState === 'ready' && hintValid() && hint.forUser && !aiNote) {
+    const ev = evalLine(hint);
+    const pvStr = hint.pv && hint.pv.length > 1 ? pvText(st, hint.pv) : '';
+    explainWithDeepSeek(hint.fen, hintTitle(st, hint.move) + ' (' + describeMove(st, hint.move) + ')', ev.text, pvStr);
+  }
+});
+$('btnAiKey').addEventListener('click', () => {
+  const next = prompt('Вставь ключ DeepSeek API (sk-...):', aiKey || '');
+  if (next === null) return;
+  aiKey = next.trim();
+  saveSettings();
+  setStat(aiKey ? 'Ключ DeepSeek сохранён.' : 'Ключ DeepSeek очищен.');
+});
 function setSide(s) {
   if (s === userSide) return;
   userSide = s; saveSettings();
   needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
-  hint = null; hintState = 'idle';
+  hint = null; hintState = 'idle'; aiNote = ''; aiReqId++;
   renderAll(); afterMove();
 }
 $('sideW').addEventListener('click', () => setSide('w'));
@@ -1094,7 +1187,7 @@ $('btnFen').addEventListener('click', () => {
   try {
     const n = parseFen(f);
     if (n.board.indexOf('K') < 0 || n.board.indexOf('k') < 0) throw new Error('no king');
-    st = n; hist = []; last = null; cands = []; hint = null; hintState = 'idle';
+    st = n; hist = []; last = null; cands = []; hint = null; hintState = 'idle'; aiNote = ''; aiReqId++;
     lastAmbiguousAt = 0;
     needSync = true;
     renderAll(); afterMove();
