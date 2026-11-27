@@ -495,12 +495,16 @@ function changedSquares(d, cfg) {
 'use strict';
 
 const $ = id => document.getElementById(id);
-const CFG = { N: 6, W: 640, tickMs: 200, moveT: 0.08, calmT: 0.035, stable: 3,
-  tcMin: 0.035, minScore: 1.2, minMargin: 0.6, engineMs: 1500 };
+const CFG = {
+  N: 6, W: 640, tickMs: 160,
+  moveT: 0.11, calmT: 0.032, stable: 2,
+  tcMin: 0.032, minScore: 0.95, minMargin: 0.35,
+  engineMs: 1200, autoSyncMs: 4500
+};
 
 const NAMES = { K: 'Король', Q: 'Ферзь', R: 'Ладья', B: 'Слон', N: 'Конь', P: 'Пешка' };
 const LET = { K: 'Кр', Q: 'Ф', R: 'Л', B: 'С', N: 'К', P: '' };
-const SOLID = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟\uFE0E' };
+const SOLID = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟︎' };
 const PROMO_NAME = { q: 'ферзя', r: 'ладью', b: 'слона', n: 'коня' };
 
 /* ---------- состояние ---------- */
@@ -512,6 +516,7 @@ let rot = 0;
 let ptsN = null, H = null;
 let camOn = false, calibMode = false, calibTaps = [];
 let fRef = null, fPrev = null, stable = 0, needSync = true;
+let lastAmbiguousAt = 0;
 let hint = null, hintState = 'idle';
 let sel = -1;
 let cands = [], candSig = '';
@@ -705,6 +710,7 @@ function commitMove(m, feat) {
   hist.push({ before: st, move: m, text: describeMove(st, m) });
   st = applyMove(st, m);
   last = m; sel = -1; cands = []; hint = null; hintState = 'idle';
+  lastAmbiguousAt = 0;
   if (feat) { fRef = feat; needSync = false; } else { needSync = true; }
   renderAll();
   afterMove();
@@ -713,7 +719,6 @@ function commitMove(m, feat) {
 function afterMove() {
   const s = getStatus(st);
   if (s === 'mate' || s === 'stalemate' || s === 'draw') { renderAll(); return; }
-  // Автоматический постоянный расчет подсказок для обоих ходов
   requestHint();
 }
 
@@ -723,6 +728,7 @@ function undoMove() {
   st = e.before;
   last = hist.length ? hist[hist.length - 1].move : null;
   sel = -1; cands = []; hint = null; hintState = 'idle';
+  lastAmbiguousAt = 0;
   needSync = true;
   renderAll();
   afterMove();
@@ -731,6 +737,7 @@ function undoMove() {
 function newGame() {
   st = parseFen(START_FEN);
   hist = []; last = null; sel = -1; cands = []; hint = null; hintState = 'idle';
+  lastAmbiguousAt = 0;
   needSync = true;
   renderAll();
   afterMove();
@@ -878,19 +885,17 @@ async function startCamera() {
     return;
   }
   try {
-    // Запрос максимального FPS (60 / 45 / 30)
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { 
-        facingMode: { ideal: 'environment' }, 
-        width: { ideal: 1280 }, 
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
         height: { ideal: 720 },
-        frameRate: { ideal: 60, min: 30 }
+        frameRate: { ideal: 60, min: 45 }
       },
       audio: false
     });
     video.srcObject = stream;
-    
-    // Принудительное включение неперывной фокусировки
+
     try {
       const track = stream.getVideoTracks()[0];
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
@@ -910,7 +915,7 @@ async function startCamera() {
     $('btnCam').disabled = true;
     $('btnCalib').disabled = false; $('btnRot').disabled = false; $('btnToggleAR').disabled = false;
     rebuildH();
-    needSync = true; fRef = null; fPrev = null; stable = 0;
+    needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
     if (H) { setStage(''); setStat('Камера работает, сетка с прошлого раза. Если доска сдвинулась, нажми «Разметить доску».'); }
     else { setStage('Нажми «Разметить доску»'); setStat('Камера работает. Теперь отметь углы доски.'); }
     try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {}); } catch (e) { /* ничего */ }
@@ -939,7 +944,7 @@ view.addEventListener('click', ev => {
     rebuildH();
     saveSettings();
     calibMode = false;
-    needSync = true; fRef = null; fPrev = null; stable = 0;
+    needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
     setStage('');
     setStat('Сетка готова. Проверь: подпись a1 должна быть в углу слева от белых. Если нет, жми «Повернуть сетку». Потом «Новая партия».');
   }
@@ -947,7 +952,6 @@ view.addEventListener('click', ev => {
 
 function drawOverlay() {
   if (H) {
-    // 1. Отрисовка сетки
     vctx.lineWidth = 1.5;
     vctx.strokeStyle = 'rgba(245,184,61,.85)';
     vctx.beginPath();
@@ -959,7 +963,6 @@ function drawOverlay() {
     }
     vctx.stroke();
 
-    // 2. Отрисовка лучшего хода прямо на камере (AR Arrow & Glow)
     const showHint = hintState === 'ready' && hintValid();
     if (showHint && hint && hint.move) {
       const m = hint.move;
@@ -969,7 +972,6 @@ function drawOverlay() {
       const pFrom = applyH(H, uvFrom[0] + 0.5 / 8, uvFrom[1] + 0.5 / 8);
       const pTo = applyH(H, uvTo[0] + 0.5 / 8, uvTo[1] + 0.5 / 8);
 
-      // Зеленая подсвеченная аура начальной и конечной клетки
       vctx.fillStyle = hint.forUser ? 'rgba(76, 195, 138, 0.45)' : 'rgba(255, 122, 107, 0.45)';
       vctx.strokeStyle = hint.forUser ? '#4CC38A' : '#FF7A6B';
       vctx.lineWidth = 3;
@@ -977,18 +979,16 @@ function drawOverlay() {
       vctx.beginPath(); vctx.arc(pFrom[0], pFrom[1], 18, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
       vctx.beginPath(); vctx.arc(pTo[0], pTo[1], 18, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
 
-      // Стрелка указателя прямо по видеопотоку
       const angle = Math.atan2(pTo[1] - pFrom[1], pTo[0] - pFrom[0]);
       vctx.lineWidth = 5;
       vctx.strokeStyle = '#F5B83D';
       vctx.fillStyle = '#F5B83D';
-      
+
       vctx.beginPath();
       vctx.moveTo(pFrom[0], pFrom[1]);
       vctx.lineTo(pTo[0], pTo[1]);
       vctx.stroke();
 
-      // Наконечник стрелки
       const headLen = 14;
       vctx.beginPath();
       vctx.moveTo(pTo[0], pTo[1]);
@@ -996,9 +996,20 @@ function drawOverlay() {
       vctx.lineTo(pTo[0] - headLen * Math.cos(angle + Math.PI / 6), pTo[1] - headLen * Math.sin(angle + Math.PI / 6));
       vctx.closePath();
       vctx.fill();
+
+      const label = sqName(m.from) + '→' + sqName(m.to);
+      const midX = (pFrom[0] + pTo[0]) * 0.5;
+      const midY = (pFrom[1] + pTo[1]) * 0.5 - 12;
+      vctx.font = 'bold 15px system-ui, sans-serif';
+      vctx.textAlign = 'center';
+      vctx.textBaseline = 'middle';
+      vctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      vctx.lineWidth = 4;
+      vctx.strokeText(label, midX, midY);
+      vctx.fillStyle = '#FFF3C4';
+      vctx.fillText(label, midX, midY);
     }
 
-    // 3. Отрисовка виртуальных фигур прямо в сетке (AR Grid Overlay)
     if (showAR) {
       vctx.font = 'bold 22px system-ui, sans-serif';
       vctx.textAlign = 'center';
@@ -1023,7 +1034,6 @@ function drawOverlay() {
       }
     }
 
-    // 4. Отрисовка угловых меток a1 и h8
     vctx.font = 'bold 15px system-ui,sans-serif';
     vctx.textAlign = 'left';
     vctx.textBaseline = 'alphabetic';
@@ -1053,7 +1063,6 @@ function drawOverlay() {
   }
 }
 
-// 60 FPS Render Loop без искусственной задержки
 function drawLoop() {
   requestAnimationFrame(drawLoop);
   if (!camOn) return;
@@ -1083,9 +1092,9 @@ function tick() {
   if (stable < CFG.stable) return;
 
   if (needSync || !fRef) {
-    fRef = feat; needSync = false;
+    fRef = feat; needSync = false; lastAmbiguousAt = 0;
     if (cands.length) { cands = []; renderCands(); }
-    setStat('Кадр запомнен. Жду ход.');
+    setStat('Кадр запомнен. Слежу за партией…');
     return;
   }
   const s = getStatus(st);
@@ -1095,9 +1104,9 @@ function tick() {
   let md = 0;
   for (let i = 0; i < 64; i++) if (d[i] > md) md = d[i];
   if (md < CFG.calmT) {
-    fRef = feat;
+    fRef = feat; lastAmbiguousAt = 0;
     if (cands.length) { cands = []; renderCands(); }
-    setStat('Жду ход…');
+    setStat('Слежу за партией…');
     return;
   }
   const rank = rankMoves(st, d, CFG);
@@ -1105,13 +1114,23 @@ function tick() {
   const best = rank[0], second = rank[1];
   const margin = second ? best.score - second.score : best.score;
   if (best.score >= CFG.minScore && margin >= CFG.minMargin) {
-    setStat('Вижу ход: ' + describeMove(st, best.move));
+    setStat('Ход: ' + describeMove(st, best.move));
     commitMove(best.move, feat);
   } else {
+    const now = Date.now();
+    if (!lastAmbiguousAt) lastAmbiguousAt = now;
+    if (now - lastAmbiguousAt >= CFG.autoSyncMs) {
+      fRef = feat;
+      lastAmbiguousAt = 0;
+      cands = [];
+      renderCands();
+      setStat('Автоподстройка кадра под позицию. Слежу дальше…');
+      return;
+    }
     const names = changedSquares(d, CFG).slice(0, 6).map(sqName).join(', ');
-    cands = rank.filter(r => r.score >= 0.5).slice(0, 3).map(r => r.move);
+    cands = rank.filter(r => r.score >= 0.45).slice(0, 3).map(r => r.move);
     renderCands();
-    setStat('Не уверена, какой ход. Изменились клетки: ' + (names || '—') + '. Выбери ход ниже или сходи вручную на доске.');
+    setStat('Уточняю ход (' + (names || '—') + ')…');
   }
 }
 
@@ -1120,7 +1139,7 @@ $('btnCam').addEventListener('click', startCamera);
 $('btnCalib').addEventListener('click', startCalib);
 $('btnRot').addEventListener('click', () => {
   rot = (rot + 1) % 4; saveSettings();
-  needSync = true; fRef = null; fPrev = null; stable = 0;
+  needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
   setStat('Сетка повёрнута. Проверь подписи a1 и h8 на картинке.');
 });
 $('btnToggleAR').addEventListener('click', () => {
@@ -1130,7 +1149,7 @@ $('btnToggleAR').addEventListener('click', () => {
 function setSide(s) {
   if (s === userSide) return;
   userSide = s; saveSettings();
-  needSync = true; fRef = null; fPrev = null; stable = 0;
+  needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
   hint = null; hintState = 'idle'; sel = -1;
   renderAll(); afterMove();
 }
@@ -1139,7 +1158,7 @@ $('sideB').addEventListener('click', () => setSide('b'));
 $('btnNew').addEventListener('click', () => {
   if (hist.length && !confirm('Начать новую партию? Фигуры на доске должны стоять в начальной позиции.')) return;
   newGame();
-  setStat(camOn ? 'Новая партия. Расставь фигуры и жди: кадр запомнится сам.' : 'Новая партия.');
+  setStat(camOn ? 'Новая партия. Слежу за ходами автоматически.' : 'Новая партия.');
 });
 $('btnUndo').addEventListener('click', undoMove);
 $('btnHint').addEventListener('click', () => {
@@ -1148,8 +1167,8 @@ $('btnHint').addEventListener('click', () => {
   requestHint();
 });
 $('btnSync').addEventListener('click', () => {
-  needSync = true; fRef = null; fPrev = null; stable = 0;
-  setStat(camOn ? 'Держи доску неподвижно, кадр запомнится сам.' : 'Сначала включи камеру.');
+  needSync = true; fRef = null; fPrev = null; stable = 0; lastAmbiguousAt = 0;
+  setStat(camOn ? 'Подстраиваю кадр под текущую доску…' : 'Сначала включи камеру.');
 });
 $('btnFen').addEventListener('click', () => {
   const f = prompt('Вставь позицию в формате FEN (после неё партия пойдёт с этого места):');
@@ -1158,6 +1177,7 @@ $('btnFen').addEventListener('click', () => {
     const n = parseFen(f);
     if (n.board.indexOf('K') < 0 || n.board.indexOf('k') < 0) throw new Error('no king');
     st = n; hist = []; last = null; sel = -1; cands = []; hint = null; hintState = 'idle';
+    lastAmbiguousAt = 0;
     needSync = true;
     renderAll(); afterMove();
   } catch (e) {
