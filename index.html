@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Шахматный помощник</title>
+<title>Шахматный помощник AR</title>
 <style>
 :root{
   color-scheme: light;
@@ -495,8 +495,8 @@ function changedSquares(d, cfg) {
 'use strict';
 
 const $ = id => document.getElementById(id);
-const CFG = { N: 6, W: 640, tickMs: 250, moveT: 0.08, calmT: 0.035, stable: 4,
-  tcMin: 0.035, minScore: 1.2, minMargin: 0.6, engineMs: 2000 };
+const CFG = { N: 6, W: 640, tickMs: 200, moveT: 0.08, calmT: 0.035, stable: 3,
+  tcMin: 0.035, minScore: 1.2, minMargin: 0.6, engineMs: 1500 };
 
 const NAMES = { K: 'Король', Q: 'Ферзь', R: 'Ладья', B: 'Слон', N: 'Конь', P: 'Пешка' };
 const LET = { K: 'Кр', Q: 'Ф', R: 'Л', B: 'С', N: 'К', P: '' };
@@ -713,7 +713,8 @@ function commitMove(m, feat) {
 function afterMove() {
   const s = getStatus(st);
   if (s === 'mate' || s === 'stalemate' || s === 'draw') { renderAll(); return; }
-  if (st.turn === userSide) requestHint(); else renderAll();
+  // Автоматический постоянный расчет подсказок для обоих ходов
+  requestHint();
 }
 
 function undoMove() {
@@ -850,7 +851,7 @@ async function requestHint() {
   if (!E.w) { hintState = 'noengine'; renderAll(); return; }
   const fen = toFen(st);
   const forUser = st.turn === userSide;
-  hintState = 'thinking'; hint = null;
+  hintState = 'thinking';
   renderAll();
   const r = await analyze(fen, CFG.engineMs);
   if (!r) return;
@@ -877,25 +878,26 @@ async function startCamera() {
     return;
   }
   try {
+    // Запрос максимального FPS (60 / 45 / 30)
     stream = await navigator.mediaDevices.getUserMedia({
       video: { 
         facingMode: { ideal: 'environment' }, 
         width: { ideal: 1280 }, 
         height: { ideal: 720 },
-        frameRate: { ideal: 30 }
+        frameRate: { ideal: 60, min: 30 }
       },
       audio: false
     });
     video.srcObject = stream;
     
-    // Включение непрерывной автофокусировки, если поддерживается устройством
+    // Принудительное включение неперывной фокусировки
     try {
       const track = stream.getVideoTracks()[0];
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
       if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
         await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
       }
-    } catch (e) { /* Игнорируем, если устройство не поддерживает управление фокусом */ }
+    } catch (e) { /* игнорируем усыпление камеры */ }
 
     await video.play();
     await waitVideo();
@@ -957,7 +959,7 @@ function drawOverlay() {
     }
     vctx.stroke();
 
-    // 2. Отрисовка подсветки рекомендуемого хода на камере (AR Hint & Arrow)
+    // 2. Отрисовка лучшего хода прямо на камере (AR Arrow & Glow)
     const showHint = hintState === 'ready' && hintValid();
     if (showHint && hint && hint.move) {
       const m = hint.move;
@@ -967,22 +969,17 @@ function drawOverlay() {
       const pFrom = applyH(H, uvFrom[0] + 0.5 / 8, uvFrom[1] + 0.5 / 8);
       const pTo = applyH(H, uvTo[0] + 0.5 / 8, uvTo[1] + 0.5 / 8);
 
-      // Рисуем круги подсветки клеток источника и цели
-      vctx.fillStyle = 'rgba(76, 195, 138, 0.4)';
-      vctx.strokeStyle = '#4CC38A';
-      vctx.lineWidth = 2.5;
+      // Зеленая подсвеченная аура начальной и конечной клетки
+      vctx.fillStyle = hint.forUser ? 'rgba(76, 195, 138, 0.45)' : 'rgba(255, 122, 107, 0.45)';
+      vctx.strokeStyle = hint.forUser ? '#4CC38A' : '#FF7A6B';
+      vctx.lineWidth = 3;
 
-      vctx.beginPath();
-      vctx.arc(pFrom[0], pFrom[1], 16, 0, Math.PI * 2);
-      vctx.fill(); vctx.stroke();
+      vctx.beginPath(); vctx.arc(pFrom[0], pFrom[1], 18, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
+      vctx.beginPath(); vctx.arc(pTo[0], pTo[1], 18, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
 
-      vctx.beginPath();
-      vctx.arc(pTo[0], pTo[1], 16, 0, Math.PI * 2);
-      vctx.fill(); vctx.stroke();
-
-      // Стрелка от pFrom к pTo
+      // Стрелка указателя прямо по видеопотоку
       const angle = Math.atan2(pTo[1] - pFrom[1], pTo[0] - pFrom[0]);
-      vctx.lineWidth = 4;
+      vctx.lineWidth = 5;
       vctx.strokeStyle = '#F5B83D';
       vctx.fillStyle = '#F5B83D';
       
@@ -992,7 +989,7 @@ function drawOverlay() {
       vctx.stroke();
 
       // Наконечник стрелки
-      const headLen = 12;
+      const headLen = 14;
       vctx.beginPath();
       vctx.moveTo(pTo[0], pTo[1]);
       vctx.lineTo(pTo[0] - headLen * Math.cos(angle - Math.PI / 6), pTo[1] - headLen * Math.sin(angle - Math.PI / 6));
@@ -1001,7 +998,7 @@ function drawOverlay() {
       vctx.fill();
     }
 
-    // 3. Отрисовка виртуальных фигур прямо в сетке (AR Overlay)
+    // 3. Отрисовка виртуальных фигур прямо в сетке (AR Grid Overlay)
     if (showAR) {
       vctx.font = 'bold 22px system-ui, sans-serif';
       vctx.textAlign = 'center';
@@ -1017,9 +1014,8 @@ function drawOverlay() {
         const sym = SOLID[p.toUpperCase()];
         const whitePiece = isWhite(p);
 
-        // Обводка для читаемости поверх реальных фигур
-        vctx.strokeStyle = whitePiece ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-        vctx.lineWidth = 3;
+        vctx.strokeStyle = whitePiece ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+        vctx.lineWidth = 3.5;
         vctx.strokeText(sym, center[0], center[1]);
 
         vctx.fillStyle = whitePiece ? '#FFFFFF' : '#10161C';
@@ -1057,11 +1053,10 @@ function drawOverlay() {
   }
 }
 
-let lastDraw = 0;
-function drawLoop(ts) {
+// 60 FPS Render Loop без искусственной задержки
+function drawLoop() {
   requestAnimationFrame(drawLoop);
-  if (!camOn || ts - lastDraw < 33) return; // Оптимизация до ~30 FPS
-  lastDraw = ts;
+  if (!camOn) return;
   try {
     vctx.drawImage(video, 0, 0, CW, CH);
     drawOverlay();
