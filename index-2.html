@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Шахматный помощник</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#EEF2F5; --surface:#FFFFFF; --line:#D3DCE3; --text:#17212B; --muted:#58697A;
+  --accent:#C98500; --accent-ink:#FFFFFF; --ok:#1F8F5F; --bad:#C8402F;
+  --sq-l:#DCE4EA; --sq-d:#6E8CA3; --hl:#E39A00; --last:rgba(245,184,61,.5);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+    --bg:#12181F; --surface:#1B242E; --line:#2B3744; --text:#E8EEF2; --muted:#8EA0AF;
+    --accent:#F5B83D; --accent-ink:#1A1200; --ok:#4CC38A; --bad:#FF7A6B;
+    --hl:#F5B83D; --last:rgba(245,184,61,.4);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:12px 12px 40px;padding-top:max(12px,env(safe-area-inset-top))}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 2px 10px}
+h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
+.badge{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:3px 10px;white-space:nowrap}
+.badge.ok{color:var(--ok);border-color:var(--ok)}
+.badge.bad{color:var(--bad);border-color:var(--bad)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.stage{position:relative;border-radius:10px;overflow:hidden;background:#0c1116;min-height:150px}
+.stage canvas{display:none;width:100%;height:auto}
+.stage.on canvas{display:block}
+.stage-msg{position:absolute;left:8px;right:8px;bottom:8px;padding:8px 10px;border-radius:8px;
+  background:rgba(8,12,16,.78);color:#F2F5F7;font-size:14px}
+.stage:not(.on) .stage-msg{top:0;bottom:0;left:0;right:0;border-radius:0;display:flex;align-items:center;justify-content:center;text-align:center;background:transparent;color:#9fb0be}
+.stage-msg[hidden]{display:none}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.btn{appearance:none;border:1px solid var(--line);background:transparent;color:var(--text);
+  font:inherit;font-size:15px;min-height:44px;padding:0 14px;border-radius:10px;cursor:pointer}
+.btn:active{transform:translateY(1px)}
+.btn[disabled]{opacity:.45}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}
+.btn.seg{border-radius:0;margin:0;min-height:40px}
+.btn.seg:first-of-type{border-radius:10px 0 0 10px}
+.btn.seg:last-of-type{border-radius:0 10px 10px 0;border-left:0}
+.btn.seg[aria-pressed="true"]{background:var(--text);color:var(--bg);border-color:var(--text)}
+.status{margin:10px 2px 0;font-size:14px;color:var(--muted);min-height:20px}
+.hint-title{font-size:13px;color:var(--muted);margin:0 0 4px}
+.hint-main{font-size:26px;font-weight:700;line-height:1.2;margin:0 0 6px}
+.hint-main.small{font-size:18px;font-weight:600}
+.hint-line{margin:4px 0;font-size:15px}
+.hint-line.warn{color:var(--bad);font-weight:600}
+.hint-line.good{color:var(--ok);font-weight:600}
+.hint-line.muted{color:var(--muted);font-size:13px}
+.cands-title{font-size:14px;color:var(--muted);margin:0 0 8px}
+.board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;aspect-ratio:1/1;border-radius:8px;overflow:hidden;container-type:inline-size;touch-action:manipulation}
+.cell{position:relative;display:flex;align-items:center;justify-content:center;line-height:1;user-select:none;-webkit-user-select:none;
+  font-size:8vw;font-size:min(8vw,44px);font-size:9cqw}
+.cell.l{background-color:var(--sq-l)}
+.cell.d{background-color:var(--sq-d)}
+.cell.last{background-image:linear-gradient(var(--last),var(--last))}
+.cell.hf,.cell.ht{outline:3px solid var(--hl);outline-offset:-3px}
+.cell.ht{background-image:linear-gradient(var(--last),var(--last))}
+.cell.sel{outline:3px solid var(--text);outline-offset:-3px}
+.cell.chk{background-image:radial-gradient(circle,rgba(220,50,40,.85) 0%,rgba(220,50,40,0) 72%)}
+.cell.dot::after{content:"";position:absolute;width:26%;height:26%;border-radius:50%;background:rgba(20,30,40,.38)}
+.pc{position:relative;z-index:1}
+.pc.w{color:#fff;text-shadow:0 0 1px #000,0 0 2px #000,0 1px 2px rgba(0,0,0,.55)}
+.pc.b{color:#10161c;text-shadow:0 0 1px rgba(255,255,255,.55)}
+.rk,.fl{position:absolute;font-size:10px;font-weight:600;color:var(--text);opacity:.6;z-index:2;pointer-events:none}
+.rk{left:3px;top:2px}
+.fl{right:3px;bottom:1px}
+.l .rk,.l .fl{color:#33495a}
+.d .rk,.d .fl{color:#F4F8FA}
+.cands-list{display:flex;flex-wrap:wrap;gap:8px}
+.moves{font-size:14px;line-height:1.7;max-height:132px;overflow:auto;color:var(--text)}
+.moves .n{color:var(--muted);margin-left:6px}
+.moves:empty::before{content:"Ходов пока нет";color:var(--muted)}
+.label{font-size:14px;color:var(--muted);align-self:center;margin-right:2px}
+.seg-wrap{display:flex;align-items:center;gap:8px}
+.view-hidden{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+@media (prefers-reduced-motion: no-preference){
+  .btn{transition:transform .06s ease}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Шахматный помощник</h1>
+    <span id="engBadge" class="badge">движок: загрузка…</span>
+  </header>
+
+  <section class="panel">
+    <div class="stage" id="stage">
+      <canvas id="view" width="640" height="360"></canvas>
+      <div id="stageMsg" class="stage-msg">Камера выключена</div>
+    </div>
+    <video id="video" class="view-hidden" playsinline muted autoplay></video>
+    <div class="row">
+      <button class="btn primary" id="btnCam">Включить камеру</button>
+      <button class="btn" id="btnCalib" disabled>Разметить доску</button>
+      <button class="btn" id="btnRot" disabled>Повернуть сетку</button>
+    </div>
+    <p class="status" id="camStat" aria-live="polite">Сначала включи камеру и наведи её на доску.</p>
+  </section>
+
+  <section class="panel" id="hint" aria-live="polite"></section>
+
+  <section class="panel" id="cands" hidden></section>
+
+  <section class="panel">
+    <div class="board" id="board"></div>
+  </section>
+
+  <section class="panel">
+    <div class="seg-wrap">
+      <span class="label">Я играю:</span>
+      <div>
+        <button class="btn seg" id="sideW" aria-pressed="false">Белыми</button><button class="btn seg" id="sideB" aria-pressed="true">Чёрными</button>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnNew">Новая партия</button>
+      <button class="btn" id="btnUndo">Отменить ход</button>
+      <button class="btn" id="btnHint">Подсказка сейчас</button>
+      <button class="btn" id="btnSync">Запомнить кадр</button>
+      <button class="btn" id="btnFen">Задать позицию</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="moves" id="moves"></div>
+  </section>
+</div>
+
+<script>
+/* ===== CORE START ===== */
+const FILES = 'abcdefgh';
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const sqName = i => FILES[i & 7] + ((i >> 3) + 1);
+const sqIndex = n => (n.charCodeAt(1) - 49) * 8 + (n.charCodeAt(0) - 97);
+const isWhite = p => p !== '' && p === p.toUpperCase();
+
+function parseFen(fen) {
+  const parts = fen.trim().split(/\s+/);
+  const board = new Array(64).fill('');
+  const rows = parts[0].split('/');
+  if (rows.length !== 8) throw new Error('bad fen');
+  for (let i = 0; i < 8; i++) {
+    const rank = 7 - i;
+    let f = 0;
+    for (const ch of rows[i]) {
+      if (ch >= '1' && ch <= '8') f += +ch;
+      else {
+        if ('KQRBNPkqrbnp'.indexOf(ch) < 0 || f > 7) throw new Error('bad fen');
+        board[rank * 8 + f] = ch; f++;
+      }
+    }
+    if (f !== 8) throw new Error('bad fen');
+  }
+  const c = parts[2] || '-';
+  const turn = parts[1] === 'b' ? 'b' : 'w';
+  return {
+    board, turn,
+    castle: { K: c.includes('K'), Q: c.includes('Q'), k: c.includes('k'), q: c.includes('q') },
+    ep: (parts[3] && parts[3] !== '-') ? sqIndex(parts[3]) : -1,
+    half: +(parts[4] || 0) || 0,
+    full: +(parts[5] || 1) || 1
+  };
+}
+
+function toFen(s) {
+  const rows = [];
+  for (let r = 7; r >= 0; r--) {
+    let row = '', e = 0;
+    for (let f = 0; f < 8; f++) {
+      const p = s.board[r * 8 + f];
+      if (!p) e++;
+      else { if (e) { row += e; e = 0; } row += p; }
+    }
+    if (e) row += e;
+    rows.push(row);
+  }
+  let c = (s.castle.K ? 'K' : '') + (s.castle.Q ? 'Q' : '') + (s.castle.k ? 'k' : '') + (s.castle.q ? 'q' : '');
+  if (!c) c = '-';
+  return rows.join('/') + ' ' + s.turn + ' ' + c + ' ' + (s.ep >= 0 ? sqName(s.ep) : '-') + ' ' + s.half + ' ' + s.full;
+}
+
+const KN = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
+const KG = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+const DIAG = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+const ORTH = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+function attacked(board, sq, by) {
+  const f = sq & 7, r = sq >> 3;
+  const w = by === 'w';
+  const P = w ? 'P' : 'p', N = w ? 'N' : 'n', B = w ? 'B' : 'b', R = w ? 'R' : 'r', Q = w ? 'Q' : 'q', K = w ? 'K' : 'k';
+  const pr = w ? r - 1 : r + 1;
+  if (pr >= 0 && pr < 8) {
+    if (f > 0 && board[pr * 8 + f - 1] === P) return true;
+    if (f < 7 && board[pr * 8 + f + 1] === P) return true;
+  }
+  for (const d of KN) {
+    const x = f + d[0], y = r + d[1];
+    if (x >= 0 && x < 8 && y >= 0 && y < 8 && board[y * 8 + x] === N) return true;
+  }
+  for (const d of KG) {
+    const x = f + d[0], y = r + d[1];
+    if (x >= 0 && x < 8 && y >= 0 && y < 8 && board[y * 8 + x] === K) return true;
+  }
+  for (const d of DIAG) {
+    let x = f + d[0], y = r + d[1];
+    while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+      const p = board[y * 8 + x];
+      if (p) { if (p === B || p === Q) return true; break; }
+      x += d[0]; y += d[1];
+    }
+  }
+  for (const d of ORTH) {
+    let x = f + d[0], y = r + d[1];
+    while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+      const p = board[y * 8 + x];
+      if (p) { if (p === R || p === Q) return true; break; }
+      x += d[0]; y += d[1];
+    }
+  }
+  return false;
+}
+
+function pushPawn(out, from, to, promo) {
+  if (promo) { for (const q of ['q', 'r', 'b', 'n']) out.push({ from, to, promo: q }); }
+  else out.push({ from, to });
+}
+
+function genMoves(s) {
+  const out = [];
+  const b = s.board;
+  const white = s.turn === 'w';
+  const opp = white ? 'b' : 'w';
+  for (let sq = 0; sq < 64; sq++) {
+    const p = b[sq];
+    if (!p || isWhite(p) !== white) continue;
+    const f = sq & 7, r = sq >> 3;
+    const t = p.toUpperCase();
+    if (t === 'P') {
+      const dir = white ? 1 : -1, startR = white ? 1 : 6, promoR = white ? 7 : 0;
+      const r1 = r + dir;
+      if (r1 < 0 || r1 > 7) continue;
+      const to = r1 * 8 + f;
+      if (!b[to]) {
+        pushPawn(out, sq, to, r1 === promoR);
+        if (r === startR && !b[(r + 2 * dir) * 8 + f]) out.push({ from: sq, to: (r + 2 * dir) * 8 + f, flag: 'dbl' });
+      }
+      for (const df of [-1, 1]) {
+        const x = f + df;
+        if (x < 0 || x > 7) continue;
+        const to2 = r1 * 8 + x;
+        const q = b[to2];
+        if (q && isWhite(q) !== white) pushPawn(out, sq, to2, r1 === promoR);
+        else if (!q && to2 === s.ep) out.push({ from: sq, to: to2, flag: 'ep' });
+      }
+    } else if (t === 'N' || t === 'K') {
+      const dirs = t === 'N' ? KN : KG;
+      for (const d of dirs) {
+        const x = f + d[0], y = r + d[1];
+        if (x < 0 || x > 7 || y < 0 || y > 7) continue;
+        const q = b[y * 8 + x];
+        if (!q || isWhite(q) !== white) out.push({ from: sq, to: y * 8 + x });
+      }
+      if (t === 'K' && sq === (white ? 4 : 60)) {
+        const base = white ? 0 : 56;
+        const rook = white ? 'R' : 'r';
+        if ((white ? s.castle.K : s.castle.k) && b[base + 7] === rook && !b[base + 5] && !b[base + 6] &&
+          !attacked(b, base + 4, opp) && !attacked(b, base + 5, opp) && !attacked(b, base + 6, opp))
+          out.push({ from: sq, to: base + 6, flag: 'castle' });
+        if ((white ? s.castle.Q : s.castle.q) && b[base] === rook && !b[base + 1] && !b[base + 2] && !b[base + 3] &&
+          !attacked(b, base + 4, opp) && !attacked(b, base + 3, opp) && !attacked(b, base + 2, opp))
+          out.push({ from: sq, to: base + 2, flag: 'castle' });
+      }
+    } else {
+      const dirs = t === 'B' ? DIAG : t === 'R' ? ORTH : DIAG.concat(ORTH);
+      for (const d of dirs) {
+        let x = f + d[0], y = r + d[1];
+        while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+          const q = b[y * 8 + x];
+          if (!q) out.push({ from: sq, to: y * 8 + x });
+          else { if (isWhite(q) !== white) out.push({ from: sq, to: y * 8 + x }); break; }
+          x += d[0]; y += d[1];
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function applyMove(s, m) {
+  const b = s.board.slice();
+  const p = b[m.from];
+  const white = s.turn === 'w';
+  const captured = b[m.to];
+  b[m.to] = p; b[m.from] = '';
+  if (m.promo) b[m.to] = white ? m.promo.toUpperCase() : m.promo.toLowerCase();
+  if (m.flag === 'ep') b[m.to + (white ? -8 : 8)] = '';
+  if (m.flag === 'castle') {
+    if (m.to > m.from) { b[m.from + 1] = b[m.from + 3]; b[m.from + 3] = ''; }
+    else { b[m.from - 1] = b[m.from - 4]; b[m.from - 4] = ''; }
+  }
+  const castle = { K: s.castle.K, Q: s.castle.Q, k: s.castle.k, q: s.castle.q };
+  if (p === 'K') { castle.K = false; castle.Q = false; }
+  if (p === 'k') { castle.k = false; castle.q = false; }
+  for (const x of [m.from, m.to]) {
+    if (x === 0) castle.Q = false;
+    if (x === 7) castle.K = false;
+    if (x === 56) castle.q = false;
+    if (x === 63) castle.k = false;
+  }
+  const isPawn = p === 'P' || p === 'p';
+  return {
+    board: b,
+    turn: white ? 'b' : 'w',
+    castle,
+    ep: m.flag === 'dbl' ? (m.from + m.to) / 2 : -1,
+    half: (isPawn || captured || m.flag === 'ep') ? 0 : s.half + 1,
+    full: s.full + (white ? 0 : 1)
+  };
+}
+
+function legalMoves(s) {
+  const me = s.turn, opp = me === 'w' ? 'b' : 'w';
+  const king = me === 'w' ? 'K' : 'k';
+  return genMoves(s).filter(m => {
+    const n = applyMove(s, m);
+    const k = n.board.indexOf(king);
+    return k >= 0 && !attacked(n.board, k, opp);
+  });
+}
+
+function inCheck(s) {
+  const me = s.turn, opp = me === 'w' ? 'b' : 'w';
+  const k = s.board.indexOf(me === 'w' ? 'K' : 'k');
+  return k >= 0 && attacked(s.board, k, opp);
+}
+
+function getStatus(s) {
+  const lm = legalMoves(s);
+  const chk = inCheck(s);
+  if (!lm.length) return chk ? 'mate' : 'stalemate';
+  if (s.half >= 100) return 'draw';
+  return chk ? 'check' : 'ok';
+}
+
+function moveUci(m) { return sqName(m.from) + sqName(m.to) + (m.promo || ''); }
+
+function uciToMove(s, uci) {
+  if (!uci || uci.length < 4) return null;
+  const from = sqIndex(uci.slice(0, 2)), to = sqIndex(uci.slice(2, 4));
+  const promo = uci.length > 4 ? uci[4] : '';
+  const all = legalMoves(s);
+  for (const m of all) {
+    if (m.from === from && m.to === to && (m.promo || '') === promo) return m;
+  }
+  return null;
+}
+
+function moveSquares(m, white) {
+  const e = [m.from, m.to];
+  if (m.flag === 'ep') e.push(m.to + (white ? -8 : 8));
+  if (m.flag === 'castle') {
+    if (m.to > m.from) e.push(m.from + 3, m.from + 1);
+    else e.push(m.from - 4, m.from - 1);
+  }
+  return e;
+}
+
+/* ---- геометрия и сравнение кадров ---- */
+
+// квадрат (0,0),(1,0),(1,1),(0,1) -> четырёхугольник p[0..3]
+function makeH(p) {
+  const x0 = p[0][0], y0 = p[0][1], x1 = p[1][0], y1 = p[1][1];
+  const x2 = p[2][0], y2 = p[2][1], x3 = p[3][0], y3 = p[3][1];
+  const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3;
+  const dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+  let a, b, c, d, e, f, g, h;
+  if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9) {
+    a = x1 - x0; b = x2 - x1; c = x0; d = y1 - y0; e = y2 - y1; f = y0; g = 0; h = 0;
+  } else {
+    const den = dx1 * dy2 - dx2 * dy1;
+    g = (dx3 * dy2 - dx2 * dy3) / den;
+    h = (dx1 * dy3 - dx3 * dy1) / den;
+    a = x1 - x0 + g * x1; b = x3 - x0 + h * x3; c = x0;
+    d = y1 - y0 + g * y1; e = y3 - y0 + h * y3; f = y0;
+  }
+  return { a, b, c, d, e, f, g, h };
+}
+
+function applyH(H, u, v) {
+  const w = H.g * u + H.h * v + 1;
+  return [(H.a * u + H.b * v + H.c) / w, (H.d * u + H.e * v + H.f) / w];
+}
+
+// нижний левый угол клетки (f,r) в координатах (u,v) картинки: u вправо, v вверх
+function squareUV(f, r, side, rot) {
+  let cu, cv;
+  if (side === 'w') { cu = f; cv = r; } else { cu = 7 - f; cv = 7 - r; }
+  for (let i = 0; i < rot; i++) { const nu = cv, nv = 7 - cu; cu = nu; cv = nv; }
+  return [cu / 8, cv / 8];
+}
+
+function extractFeatures(data, w, h, H, side, rot, N) {
+  const feat = new Float32Array(64 * N * N * 3);
+  let k = 0;
+  for (let sq = 0; sq < 64; sq++) {
+    const uv = squareUV(sq & 7, sq >> 3, side, rot);
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) {
+        const u = uv[0] + (0.18 + 0.64 * (i + 0.5) / N) / 8;
+        const v = uv[1] + (0.18 + 0.64 * (j + 0.5) / N) / 8;
+        const p = applyH(H, u, v);
+        const cx = Math.round(p[0]), cy = Math.round(p[1]);
+        let r = 0, g = 0, bl = 0, n = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const y = cy + dy;
+          if (y < 0 || y >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const x = cx + dx;
+            if (x < 0 || x >= w) continue;
+            const o = (y * w + x) * 4;
+            r += data[o]; g += data[o + 1]; bl += data[o + 2]; n++;
+          }
+        }
+        if (n === 0) n = 1;
+        feat[k++] = r / n; feat[k++] = g / n; feat[k++] = bl / n;
+      }
+    }
+  }
+  return feat;
+}
+
+function normalizeFeat(feat) {
+  const m = [0, 0, 0];
+  for (let i = 0; i < feat.length; i++) m[i % 3] += feat[i];
+  const n = feat.length / 3;
+  for (let c = 0; c < 3; c++) m[c] = m[c] / n + 1e-6;
+  for (let i = 0; i < feat.length; i++) feat[i] /= m[i % 3];
+  return feat;
+}
+
+function frameDiff(f1, f2, N) {
+  const per = N * N * 3;
+  const d = new Float32Array(64);
+  for (let sq = 0; sq < 64; sq++) {
+    let s = 0;
+    const o = sq * per;
+    for (let k = 0; k < per; k++) s += Math.abs(f1[o + k] - f2[o + k]);
+    d[sq] = s / per;
+  }
+  return d;
+}
+
+// насколько уверенно изменилась каждая клетка: 0 (шум) ... 1 (точно изменилась)
+function changeScores(d, cfg) {
+  const sorted = Array.from(d).sort((a, b) => a - b);
+  const median = sorted[32];
+  const nf = 2 * median + 0.005;
+  const Tc = Math.max(cfg.tcMin, 4 * median);
+  return Array.from(d, x => Math.max(0, Math.min(1, (x - nf) / (Tc - nf))));
+}
+
+// какие ходы лучше всего объясняют изменившиеся клетки
+function rankMoves(state, d, cfg) {
+  const bb = changeScores(d, cfg);
+  const white = state.turn === 'w';
+  const res = [];
+  for (const m of legalMoves(state)) {
+    if (m.promo && m.promo !== 'q') continue;
+    const set = new Set(moveSquares(m, white));
+    let sc = 0;
+    for (let s = 0; s < 64; s++) sc += set.has(s) ? bb[s] : -bb[s];
+    res.push({ move: m, score: sc });
+  }
+  res.sort((x, y) => y.score - x.score);
+  return res;
+}
+
+function changedSquares(d, cfg) {
+  const bb = changeScores(d, cfg);
+  const out = [];
+  for (let s = 0; s < 64; s++) if (bb[s] > 0.5) out.push(s);
+  return out;
+}
+/* ===== CORE END ===== */
+</script>
+
+<script>
+(function () {
+'use strict';
+
+const $ = id => document.getElementById(id);
+const CFG = { N: 6, W: 640, tickMs: 250, moveT: 0.08, calmT: 0.035, stable: 4,
+  tcMin: 0.035, minScore: 1.2, minMargin: 0.6, engineMs: 2000 };
+
+const NAMES = { K: 'Король', Q: 'Ферзь', R: 'Ладья', B: 'Слон', N: 'Конь', P: 'Пешка' };
+const LET = { K: 'Кр', Q: 'Ф', R: 'Л', B: 'С', N: 'К', P: '' };
+const SOLID = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟\uFE0E' };
+const PROMO_NAME = { q: 'ферзя', r: 'ладью', b: 'слона', n: 'коня' };
+
+/* ---------- состояние ---------- */
+let st = parseFen(START_FEN);
+let hist = [];
+let last = null;
+let userSide = 'b';
+let rot = 0;
+let ptsN = null, H = null;
+let camOn = false, calibMode = false, calibTaps = [];
+let fRef = null, fPrev = null, stable = 0, needSync = true;
+let hint = null, hintState = 'idle';
+let sel = -1;
+let cands = [], candSig = '';
+let CW = 0, CH = 0;
+let stream = null;
+
+const video = $('video'), view = $('view');
+const vctx = view.getContext('2d');
+const grab = document.createElement('canvas');
+const gctx = grab.getContext('2d', { willReadFrequently: true });
+
+/* ---------- настройки ---------- */
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('cc_settings') || 'null');
+    if (!s) return;
+    if (s.side === 'w' || s.side === 'b') userSide = s.side;
+    if (Number.isInteger(s.rot)) rot = ((s.rot % 4) + 4) % 4;
+    if (Array.isArray(s.pts) && s.pts.length === 4) ptsN = s.pts;
+  } catch (e) { /* ничего */ }
+}
+function saveSettings() {
+  try { localStorage.setItem('cc_settings', JSON.stringify({ side: userSide, rot: rot, pts: ptsN })); } catch (e) { /* ничего */ }
+}
+function rebuildH() {
+  if (!ptsN || !CW) { H = null; return; }
+  try { H = makeH(ptsN.map(p => [p[0] * CW, p[1] * CH])); } catch (e) { H = null; }
+}
+
+/* ---------- текст ---------- */
+function ruMoves(n) {
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return n + ' ход';
+  if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return n + ' хода';
+  return n + ' ходов';
+}
+function describeMove(s, m) {
+  if (m.flag === 'castle') return m.to > m.from ? '0-0' : '0-0-0';
+  const p = s.board[m.from].toUpperCase();
+  const cap = s.board[m.to] || m.flag === 'ep';
+  return LET[p] + sqName(m.from) + (cap ? '×' : '-') + sqName(m.to) + (m.promo ? '=' + m.promo.toUpperCase() : '');
+}
+function hintTitle(s, m) {
+  if (m.flag === 'castle') return m.to > m.from ? 'Короткая рокировка' : 'Длинная рокировка';
+  const p = s.board[m.from].toUpperCase();
+  let t = NAMES[p] + ' ' + sqName(m.from) + ' → ' + sqName(m.to);
+  if (m.promo) t += ', в ' + PROMO_NAME[m.promo];
+  return t;
+}
+function pvText(s, pv) {
+  const out = [];
+  let cur = s;
+  for (const u of (pv || []).slice(0, 5)) {
+    const m = uciToMove(cur, u);
+    if (!m) break;
+    out.push(describeMove(cur, m));
+    cur = applyMove(cur, m);
+  }
+  return out.join('  ');
+}
+function evalLine(h) {
+  const sc = h.score;
+  if (!sc) return { text: '', cls: '' };
+  if (sc.type === 'mate') {
+    const n = Math.abs(sc.value);
+    if (sc.value > 0) return { text: h.forUser ? 'Можно поставить мат за ' + ruMoves(n) + '.' : 'Сопернику доступен мат за ' + ruMoves(n) + '.', cls: h.forUser ? 'good' : 'warn' };
+    return { text: h.forUser ? 'Тебе грозит мат за ' + ruMoves(n) + '. Этот ход — лучшая защита.' : 'Сопернику грозит мат за ' + ruMoves(n) + '.', cls: h.forUser ? 'warn' : 'good' };
+  }
+  const p = sc.value / 100;
+  const u = h.forUser ? p : -p;
+  let t;
+  if (u >= 1.5) t = 'У тебя заметный перевес';
+  else if (u >= 0.5) t = 'У тебя небольшое преимущество';
+  else if (u > -0.5) t = 'Позиция примерно равная';
+  else if (u > -1.5) t = 'У соперника небольшое преимущество';
+  else t = 'У соперника заметный перевес';
+  return { text: t + ' (' + (u > 0 ? '+' : '') + u.toFixed(1) + ')', cls: '' };
+}
+
+/* ---------- отрисовка интерфейса ---------- */
+function setStat(t) { $('camStat').textContent = t; }
+function setStage(t) {
+  const el = $('stageMsg');
+  if (t) { el.textContent = t; el.hidden = false; } else { el.hidden = true; }
+}
+
+function hintValid() { return hint && hint.fen === toFen(st); }
+
+function renderBoard() {
+  const flip = userSide === 'b';
+  const targets = new Set();
+  if (sel >= 0) for (const m of legalMoves(st)) if (m.from === sel) targets.add(m.to);
+  const chkSq = inCheck(st) ? st.board.indexOf(st.turn === 'w' ? 'K' : 'k') : -1;
+  const showHint = hintState === 'ready' && hintValid();
+  let html = '';
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const f = flip ? 7 - col : col;
+      const r = flip ? row : 7 - row;
+      const sq = r * 8 + f;
+      const p = st.board[sq];
+      let cls = 'cell ' + (((f + r) % 2 === 1) ? 'l' : 'd');
+      if (last && (sq === last.from || sq === last.to)) cls += ' last';
+      if (showHint && sq === hint.move.from) cls += ' hf';
+      if (showHint && sq === hint.move.to) cls += ' ht';
+      if (sq === sel) cls += ' sel';
+      if (targets.has(sq)) cls += ' dot';
+      if (sq === chkSq) cls += ' chk';
+      const glyph = p ? '<span class="pc ' + (isWhite(p) ? 'w' : 'b') + '">' + SOLID[p.toUpperCase()] + '</span>' : '';
+      const co = (col === 0 ? '<span class="rk">' + (r + 1) + '</span>' : '') + (row === 7 ? '<span class="fl">' + FILES[f] + '</span>' : '');
+      html += '<div class="' + cls + '" data-sq="' + sq + '">' + co + glyph + '</div>';
+    }
+  }
+  $('board').innerHTML = html;
+}
+
+function renderHint() {
+  const el = $('hint');
+  const s = getStatus(st);
+  let html = '';
+  if (s === 'mate') {
+    const winner = st.turn === 'w' ? 'b' : 'w';
+    const won = winner === userSide;
+    html = '<p class="hint-main">Мат. ' + (winner === 'w' ? 'Победили белые.' : 'Победили чёрные.') + '</p>' +
+      '<p class="hint-line ' + (won ? 'good' : 'warn') + '">' + (won ? 'Ты выиграл!' : 'В этот раз не вышло. Нажми «Новая партия».') + '</p>';
+  } else if (s === 'stalemate') {
+    html = '<p class="hint-main">Пат</p><p class="hint-line">Ничья: у стороны на ходу нет ходов, но шаха нет.</p>';
+  } else if (s === 'draw') {
+    html = '<p class="hint-main">Ничья</p><p class="hint-line">Прошло 50 ходов без взятий и ходов пешками.</p>';
+  } else if (hintState === 'noengine') {
+    html = '<p class="hint-title">Подсказки</p><p class="hint-main small">Движок не загрузился</p>' +
+      '<p class="hint-line muted">Доска и камера работают, но лучшие ходы считать нечем. Проверь интернет и перезапусти приложение.</p>';
+  } else if (hintState === 'thinking') {
+    html = '<p class="hint-title">' + (st.turn === userSide ? 'Твой ход' : 'Ход соперника') + '</p><p class="hint-main small">Считаю лучший ход…</p>';
+  } else if (hintState === 'ready' && hintValid()) {
+    const ev = evalLine(hint);
+    const chk = getStatus(st) === 'check';
+    html = '<p class="hint-title">' + (hint.forUser ? 'Ходи так' : 'Лучший ход соперника') + '</p>' +
+      '<p class="hint-main">' + hintTitle(st, hint.move) + '</p>' +
+      (chk && hint.forUser ? '<p class="hint-line warn">Тебе шах: нужно защитить короля.</p>' : '') +
+      (ev.text ? '<p class="hint-line ' + ev.cls + '">' + ev.text + '</p>' : '') +
+      (hint.pv && hint.pv.length > 1 ? '<p class="hint-line muted">Дальше: ' + pvText(st, hint.pv) + '</p>' : '');
+  } else if (st.turn !== userSide) {
+    html = '<p class="hint-title">Ход соперника</p><p class="hint-main small">Жду, когда ' + (st.turn === 'w' ? 'белые' : 'чёрные') + ' сходят</p>' +
+      '<p class="hint-line muted">Подсказка появится на твоём ходу. Нужна сейчас — нажми «Подсказка сейчас».</p>';
+  } else {
+    html = '<p class="hint-title">Твой ход</p><p class="hint-main small">Подсказка скоро появится</p>';
+  }
+  el.innerHTML = html;
+}
+
+function renderCands() {
+  const el = $('cands');
+  const sig = cands.map(moveUci).join(',') + '|' + toFen(st);
+  if (sig === candSig) return;
+  candSig = sig;
+  if (!cands.length) { el.hidden = true; el.innerHTML = ''; return; }
+  let html = '<p class="cands-title">Не уверена, какой ход был сделан. Выбери:</p><div class="cands-list">';
+  cands.forEach((m, i) => { html += '<button class="btn" data-i="' + i + '">' + describeMove(st, m) + '</button>'; });
+  html += '</div>';
+  el.innerHTML = html;
+  el.hidden = false;
+}
+
+function renderMoves() {
+  let html = '';
+  hist.forEach((e, i) => {
+    const b = e.before;
+    if (b.turn === 'w') html += '<span class="n">' + b.full + '.</span> ' + e.text + ' ';
+    else html += (i === 0 ? '<span class="n">' + b.full + '…</span> ' : '') + e.text + ' ';
+  });
+  const el = $('moves');
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderSide() {
+  $('sideW').setAttribute('aria-pressed', userSide === 'w' ? 'true' : 'false');
+  $('sideB').setAttribute('aria-pressed', userSide === 'b' ? 'true' : 'false');
+}
+
+function renderAll() {
+  renderBoard(); renderHint(); renderCands(); renderMoves(); renderSide();
+}
+
+/* ---------- ходы ---------- */
+function commitMove(m, feat) {
+  hist.push({ before: st, move: m, text: describeMove(st, m) });
+  st = applyMove(st, m);
+  last = m; sel = -1; cands = []; hint = null; hintState = 'idle';
+  if (feat) { fRef = feat; needSync = false; } else { needSync = true; }
+  renderAll();
+  afterMove();
+}
+
+function afterMove() {
+  const s = getStatus(st);
+  if (s === 'mate' || s === 'stalemate' || s === 'draw') { renderAll(); return; }
+  if (st.turn === userSide) requestHint(); else renderAll();
+}
+
+function undoMove() {
+  if (!hist.length) return;
+  const e = hist.pop();
+  st = e.before;
+  last = hist.length ? hist[hist.length - 1].move : null;
+  sel = -1; cands = []; hint = null; hintState = 'idle';
+  needSync = true;
+  renderAll();
+  afterMove();
+}
+
+function newGame() {
+  st = parseFen(START_FEN);
+  hist = []; last = null; sel = -1; cands = []; hint = null; hintState = 'idle';
+  needSync = true;
+  renderAll();
+  afterMove();
+}
+
+$('board').addEventListener('click', ev => {
+  const el = ev.target.closest('[data-sq]');
+  if (!el) return;
+  const sq = +el.getAttribute('data-sq');
+  const mine = p => p && isWhite(p) === (st.turn === 'w');
+  if (getStatus(st) === 'mate' || getStatus(st) === 'stalemate') return;
+  if (sel < 0) {
+    if (mine(st.board[sq])) { sel = sq; renderBoard(); }
+    return;
+  }
+  if (sq === sel) { sel = -1; renderBoard(); return; }
+  const m = legalMoves(st).find(x => x.from === sel && x.to === sq && (!x.promo || x.promo === 'q'));
+  if (m) { commitMove(m, null); return; }
+  sel = mine(st.board[sq]) ? sq : -1;
+  renderBoard();
+});
+
+$('cands').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-i]');
+  if (!b) return;
+  const m = cands[+b.getAttribute('data-i')];
+  if (m) commitMove(m, null);
+});
+
+/* ---------- движок ---------- */
+const E = { w: null, busy: false, pending: null, cur: null };
+
+function engineMsg(ev) {
+  const line = String(ev.data);
+  const r = E.cur;
+  if (!r) return;
+  if (line.indexOf('info') === 0 && line.indexOf(' score ') > 0) {
+    const m = line.match(/score (cp|mate) (-?\d+)/);
+    const pv = line.match(/ pv (.+)$/);
+    if (m) r.score = { type: m[1], value: +m[2] };
+    if (pv) r.pv = pv[1].trim().split(/\s+/);
+  } else if (line.indexOf('bestmove') === 0) {
+    const stale = !!E.pending;
+    E.busy = false; E.cur = null;
+    if (stale) r.resolve(null);
+    else r.resolve({ best: line.split(/\s+/)[1], score: r.score, pv: r.pv });
+    if (E.pending) { const n = E.pending; E.pending = null; startSearch(n); }
+  }
+}
+function startSearch(req) {
+  E.busy = true; E.cur = req;
+  E.w.postMessage('position fen ' + req.fen);
+  E.w.postMessage('go movetime ' + req.ms);
+}
+function analyze(fen, ms) {
+  return new Promise(resolve => {
+    if (!E.w) { resolve(null); return; }
+    const req = { fen, ms, resolve, score: null, pv: [] };
+    if (E.busy) {
+      if (E.pending) E.pending.resolve(null);
+      E.pending = req;
+      E.w.postMessage('stop');
+    } else startSearch(req);
+  });
+}
+function handshake(w) {
+  return new Promise((resolve, reject) => {
+    let stage = 0;
+    const t = setTimeout(() => { try { w.terminate(); } catch (e) { /* ничего */ } reject(new Error('timeout')); }, 25000);
+    w.onerror = () => { clearTimeout(t); reject(new Error('worker error')); };
+    w.onmessage = ev => {
+      const line = String(ev.data);
+      if (stage === 0 && line === 'uciok') { stage = 1; w.postMessage('isready'); }
+      else if (stage === 1 && line === 'readyok') { clearTimeout(t); resolve(); }
+    };
+    w.postMessage('uci');
+  });
+}
+async function makeWorker(url, mode) {
+  let w;
+  if (mode === 'direct') {
+    w = new Worker(url);
+  } else {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('http ' + res.status);
+    const code = await res.text();
+    w = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+  }
+  try { await handshake(w); } catch (e) { try { w.terminate(); } catch (e2) { /* ничего */ } throw e; }
+  return w;
+}
+async function initEngine() {
+  const CDN = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/';
+  const tries = [
+    ['vendor/stockfish.js', 'direct'],
+    ['vendor/stockfish.js', 'blob'],
+    [CDN + 'stockfish.js', 'blob'],
+    [CDN + 'stockfish.min.js', 'blob']
+  ];
+  for (const t of tries) {
+    try {
+      const w = await makeWorker(t[0], t[1]);
+      w.onmessage = engineMsg;
+      w.onerror = null;
+      E.w = w;
+      const b = $('engBadge'); b.textContent = 'движок готов'; b.className = 'badge ok';
+      if (hintState === 'noengine') hintState = 'idle';
+      afterMove();
+      return;
+    } catch (e) { /* пробуем следующий */ }
+  }
+  const b = $('engBadge'); b.textContent = 'движок: нет'; b.className = 'badge bad';
+  hintState = 'noengine';
+  renderHint();
+}
+
+async function requestHint() {
+  if (!E.w) { hintState = 'noengine'; renderAll(); return; }
+  const fen = toFen(st);
+  const forUser = st.turn === userSide;
+  hintState = 'thinking'; hint = null;
+  renderAll();
+  const r = await analyze(fen, CFG.engineMs);
+  if (!r) return;
+  if (toFen(st) !== fen) return;
+  const m = (!r.best || r.best === '(none)') ? null : uciToMove(st, r.best);
+  if (!m) { hintState = 'idle'; renderAll(); return; }
+  hint = { move: m, score: r.score, pv: r.pv, fen, forUser };
+  hintState = 'ready';
+  renderAll();
+}
+
+/* ---------- камера ---------- */
+function waitVideo() {
+  return new Promise(resolve => {
+    if (video.videoWidth) { resolve(); return; }
+    const t = setTimeout(resolve, 4000);
+    video.addEventListener('loadedmetadata', () => { clearTimeout(t); resolve(); }, { once: true });
+  });
+}
+
+async function startCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStat('Камера недоступна. Открой приложение, установленное из APK, а не файл в браузере.');
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    await waitVideo();
+    if (!video.videoWidth) throw new Error('no video');
+    CW = CFG.W; CH = Math.round(CW * video.videoHeight / video.videoWidth);
+    view.width = CW; view.height = CH; grab.width = CW; grab.height = CH;
+    camOn = true;
+    $('stage').classList.add('on');
+    $('btnCam').textContent = 'Камера включена';
+    $('btnCam').disabled = true;
+    $('btnCalib').disabled = false; $('btnRot').disabled = false;
+    rebuildH();
+    needSync = true; fRef = null; fPrev = null; stable = 0;
+    if (H) { setStage(''); setStat('Камера работает, сетка с прошлого раза. Если доска сдвинулась, нажми «Разметить доску».'); }
+    else { setStage('Нажми «Разметить доску»'); setStat('Камера работает. Теперь отметь углы доски.'); }
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {}); } catch (e) { /* ничего */ }
+  } catch (err) {
+    const n = (err && err.name) ? err.name : String(err);
+    setStat('Нет доступа к камере (' + n + '). Разреши камеру для приложения в настройках телефона и попробуй снова.');
+  }
+}
+
+function startCalib() {
+  if (!camOn) return;
+  calibMode = true; calibTaps = [];
+  setStage('Нажми на 4 угла доски: левый нижний, правый нижний, правый верхний, левый верхний (как на экране)');
+  setStat('Отмечено углов: 0 из 4.');
+}
+
+view.addEventListener('click', ev => {
+  if (!calibMode || !camOn) return;
+  const r = view.getBoundingClientRect();
+  const x = (ev.clientX - r.left) * CW / r.width;
+  const y = (ev.clientY - r.top) * CH / r.height;
+  calibTaps.push([x, y]);
+  setStat('Отмечено углов: ' + calibTaps.length + ' из 4.');
+  if (calibTaps.length === 4) {
+    ptsN = calibTaps.map(p => [p[0] / CW, p[1] / CH]);
+    rebuildH();
+    saveSettings();
+    calibMode = false;
+    needSync = true; fRef = null; fPrev = null; stable = 0;
+    setStage('');
+    setStat('Сетка готова. Проверь: подпись a1 должна быть в углу слева от белых. Если нет, жми «Повернуть сетку». Потом «Новая партия».');
+  }
+});
+
+function drawOverlay() {
+  if (H) {
+    vctx.lineWidth = 1.5;
+    vctx.strokeStyle = 'rgba(245,184,61,.9)';
+    vctx.beginPath();
+    for (let i = 0; i <= 8; i++) {
+      const a = applyH(H, i / 8, 0), b = applyH(H, i / 8, 1);
+      const c = applyH(H, 0, i / 8), d = applyH(H, 1, i / 8);
+      vctx.moveTo(a[0], a[1]); vctx.lineTo(b[0], b[1]);
+      vctx.moveTo(c[0], c[1]); vctx.lineTo(d[0], d[1]);
+    }
+    vctx.stroke();
+    vctx.font = 'bold 16px system-ui,sans-serif';
+    vctx.fillStyle = '#fff';
+    vctx.strokeStyle = 'rgba(0,0,0,.8)';
+    vctx.lineWidth = 3;
+    for (const sq of [0, 63]) {
+      const uv = squareUV(sq & 7, sq >> 3, userSide, rot);
+      const p = applyH(H, uv[0] + 1 / 16, uv[1] + 1 / 16);
+      const t = sqName(sq);
+      vctx.strokeText(t, p[0] - 10, p[1] + 6);
+      vctx.fillText(t, p[0] - 10, p[1] + 6);
+    }
+  }
+  if (calibMode) {
+    vctx.fillStyle = 'rgba(245,184,61,.95)';
+    vctx.strokeStyle = '#000';
+    vctx.lineWidth = 2;
+    calibTaps.forEach((p, i) => {
+      vctx.beginPath(); vctx.arc(p[0], p[1], 8, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
+      vctx.fillStyle = '#000'; vctx.font = 'bold 11px system-ui,sans-serif';
+      vctx.fillText(String(i + 1), p[0] - 3, p[1] + 4);
+      vctx.fillStyle = 'rgba(245,184,61,.95)';
+    });
+  }
+}
+
+let lastDraw = 0;
+function drawLoop(ts) {
+  requestAnimationFrame(drawLoop);
+  if (!camOn || ts - lastDraw < 66) return;
+  lastDraw = ts;
+  try {
+    vctx.drawImage(video, 0, 0, CW, CH);
+    drawOverlay();
+  } catch (e) { /* кадр ещё не готов */ }
+}
+
+/* ---------- слежение за ходами ---------- */
+function tick() {
+  if (!camOn || !H || calibMode || video.readyState < 2) return;
+  let img;
+  try {
+    gctx.drawImage(video, 0, 0, CW, CH);
+    img = gctx.getImageData(0, 0, CW, CH);
+  } catch (e) { return; }
+  const feat = extractFeatures(img.data, CW, CH, H, userSide, rot, CFG.N);
+  normalizeFeat(feat);
+  if (!fPrev) { fPrev = feat; stable = 0; return; }
+  const dp = frameDiff(feat, fPrev, CFG.N);
+  fPrev = feat;
+  let mx = 0;
+  for (let i = 0; i < 64; i++) if (dp[i] > mx) mx = dp[i];
+  if (mx > CFG.moveT) { stable = 0; setStat('Вижу движение…'); return; }
+  stable++;
+  if (stable < CFG.stable) return;
+
+  if (needSync || !fRef) {
+    fRef = feat; needSync = false;
+    if (cands.length) { cands = []; renderCands(); }
+    setStat('Кадр запомнен. Жду ход.');
+    return;
+  }
+  const s = getStatus(st);
+  if (s === 'mate' || s === 'stalemate' || s === 'draw') return;
+
+  const d = frameDiff(feat, fRef, CFG.N);
+  let md = 0;
+  for (let i = 0; i < 64; i++) if (d[i] > md) md = d[i];
+  if (md < CFG.calmT) {
+    fRef = feat;
+    if (cands.length) { cands = []; renderCands(); }
+    setStat('Жду ход…');
+    return;
+  }
+  const rank = rankMoves(st, d, CFG);
+  if (!rank.length) return;
+  const best = rank[0], second = rank[1];
+  const margin = second ? best.score - second.score : best.score;
+  if (best.score >= CFG.minScore && margin >= CFG.minMargin) {
+    setStat('Вижу ход: ' + describeMove(st, best.move));
+    commitMove(best.move, feat);
+  } else {
+    const names = changedSquares(d, CFG).slice(0, 6).map(sqName).join(', ');
+    cands = rank.filter(r => r.score >= 0.5).slice(0, 3).map(r => r.move);
+    renderCands();
+    setStat('Не уверена, какой ход. Изменились клетки: ' + (names || '—') + '. Выбери ход ниже или сходи вручную на доске.');
+  }
+}
+
+/* ---------- кнопки ---------- */
+$('btnCam').addEventListener('click', startCamera);
+$('btnCalib').addEventListener('click', startCalib);
+$('btnRot').addEventListener('click', () => {
+  rot = (rot + 1) % 4; saveSettings();
+  needSync = true; fRef = null; fPrev = null; stable = 0;
+  setStat('Сетка повёрнута. Проверь подписи a1 и h8 на картинке.');
+});
+function setSide(s) {
+  if (s === userSide) return;
+  userSide = s; saveSettings();
+  needSync = true; fRef = null; fPrev = null; stable = 0;
+  hint = null; hintState = 'idle'; sel = -1;
+  renderAll(); afterMove();
+}
+$('sideW').addEventListener('click', () => setSide('w'));
+$('sideB').addEventListener('click', () => setSide('b'));
+$('btnNew').addEventListener('click', () => {
+  if (hist.length && !confirm('Начать новую партию? Фигуры на доске должны стоять в начальной позиции.')) return;
+  newGame();
+  setStat(camOn ? 'Новая партия. Расставь фигуры и жди: кадр запомнится сам.' : 'Новая партия.');
+});
+$('btnUndo').addEventListener('click', undoMove);
+$('btnHint').addEventListener('click', () => {
+  const s = getStatus(st);
+  if (s === 'mate' || s === 'stalemate' || s === 'draw') return;
+  requestHint();
+});
+$('btnSync').addEventListener('click', () => {
+  needSync = true; fRef = null; fPrev = null; stable = 0;
+  setStat(camOn ? 'Держи доску неподвижно, кадр запомнится сам.' : 'Сначала включи камеру.');
+});
+$('btnFen').addEventListener('click', () => {
+  const f = prompt('Вставь позицию в формате FEN (после неё партия пойдёт с этого места):');
+  if (!f) return;
+  try {
+    const n = parseFen(f);
+    if (n.board.indexOf('K') < 0 || n.board.indexOf('k') < 0) throw new Error('no king');
+    st = n; hist = []; last = null; sel = -1; cands = []; hint = null; hintState = 'idle';
+    needSync = true;
+    renderAll(); afterMove();
+  } catch (e) {
+    alert('Не получилось прочитать позицию. Проверь, что это FEN.');
+  }
+});
+
+/* ---------- запуск ---------- */
+loadSettings();
+renderAll();
+setInterval(tick, CFG.tickMs);
+requestAnimationFrame(drawLoop);
+initEngine();
+
+window.__dbg = {
+  commitMove: commitMove,
+  getState: () => st,
+  getHist: () => hist,
+  undo: undoMove
+};
+})();
+</script>
+</body>
+</html>
