@@ -33,7 +33,7 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
 .stage canvas{display:none;width:100%;height:auto}
 .stage.on canvas{display:block}
 .stage-msg{position:absolute;left:8px;right:8px;bottom:8px;padding:8px 10px;border-radius:8px;
-  background:rgba(8,12,16,.78);color:#F2F5F7;font-size:14px}
+  background:rgba(8,12,16,.78);color:#F2F5F7;font-size:14px;z-index:10}
 .stage:not(.on) .stage-msg{top:0;bottom:0;left:0;right:0;border-radius:0;display:flex;align-items:center;justify-content:center;text-align:center;background:transparent;color:#9fb0be}
 .stage-msg[hidden]{display:none}
 .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
@@ -103,6 +103,7 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.01em}
       <button class="btn primary" id="btnCam">Включить камеру</button>
       <button class="btn" id="btnCalib" disabled>Разметить доску</button>
       <button class="btn" id="btnRot" disabled>Повернуть сетку</button>
+      <button class="btn" id="btnToggleAR" disabled>Фигуры: ВКЛ</button>
     </div>
     <p class="status" id="camStat" aria-live="polite">Сначала включи камеру и наведи её на доску.</p>
   </section>
@@ -376,8 +377,6 @@ function moveSquares(m, white) {
 }
 
 /* ---- геометрия и сравнение кадров ---- */
-
-// квадрат (0,0),(1,0),(1,1),(0,1) -> четырёхугольник p[0..3]
 function makeH(p) {
   const x0 = p[0][0], y0 = p[0][1], x1 = p[1][0], y1 = p[1][1];
   const x2 = p[2][0], y2 = p[2][1], x3 = p[3][0], y3 = p[3][1];
@@ -401,7 +400,6 @@ function applyH(H, u, v) {
   return [(H.a * u + H.b * v + H.c) / w, (H.d * u + H.e * v + H.f) / w];
 }
 
-// нижний левый угол клетки (f,r) в координатах (u,v) картинки: u вправо, v вверх
 function squareUV(f, r, side, rot) {
   let cu, cv;
   if (side === 'w') { cu = f; cv = r; } else { cu = 7 - f; cv = 7 - r; }
@@ -460,7 +458,6 @@ function frameDiff(f1, f2, N) {
   return d;
 }
 
-// насколько уверенно изменилась каждая клетка: 0 (шум) ... 1 (точно изменилась)
 function changeScores(d, cfg) {
   const sorted = Array.from(d).sort((a, b) => a - b);
   const median = sorted[32];
@@ -469,7 +466,6 @@ function changeScores(d, cfg) {
   return Array.from(d, x => Math.max(0, Math.min(1, (x - nf) / (Tc - nf))));
 }
 
-// какие ходы лучше всего объясняют изменившиеся клетки
 function rankMoves(state, d, cfg) {
   const bb = changeScores(d, cfg);
   const white = state.turn === 'w';
@@ -521,6 +517,7 @@ let sel = -1;
 let cands = [], candSig = '';
 let CW = 0, CH = 0;
 let stream = null;
+let showAR = true;
 
 const video = $('video'), view = $('view');
 const vctx = view.getContext('2d');
@@ -535,10 +532,11 @@ function loadSettings() {
     if (s.side === 'w' || s.side === 'b') userSide = s.side;
     if (Number.isInteger(s.rot)) rot = ((s.rot % 4) + 4) % 4;
     if (Array.isArray(s.pts) && s.pts.length === 4) ptsN = s.pts;
+    if (typeof s.showAR === 'boolean') showAR = s.showAR;
   } catch (e) { /* ничего */ }
 }
 function saveSettings() {
-  try { localStorage.setItem('cc_settings', JSON.stringify({ side: userSide, rot: rot, pts: ptsN })); } catch (e) { /* ничего */ }
+  try { localStorage.setItem('cc_settings', JSON.stringify({ side: userSide, rot: rot, pts: ptsN, showAR })); } catch (e) { /* ничего */ }
 }
 function rebuildH() {
   if (!ptsN || !CW) { H = null; return; }
@@ -695,6 +693,7 @@ function renderMoves() {
 function renderSide() {
   $('sideW').setAttribute('aria-pressed', userSide === 'w' ? 'true' : 'false');
   $('sideB').setAttribute('aria-pressed', userSide === 'b' ? 'true' : 'false');
+  $('btnToggleAR').textContent = 'Фигуры: ' + (showAR ? 'ВКЛ' : 'ВЫКЛ');
 }
 
 function renderAll() {
@@ -879,10 +878,25 @@ async function startCamera() {
   }
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { 
+        facingMode: { ideal: 'environment' }, 
+        width: { ideal: 1280 }, 
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 }
+      },
       audio: false
     });
     video.srcObject = stream;
+    
+    // Включение непрерывной автофокусировки, если поддерживается устройством
+    try {
+      const track = stream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+      }
+    } catch (e) { /* Игнорируем, если устройство не поддерживает управление фокусом */ }
+
     await video.play();
     await waitVideo();
     if (!video.videoWidth) throw new Error('no video');
@@ -892,7 +906,7 @@ async function startCamera() {
     $('stage').classList.add('on');
     $('btnCam').textContent = 'Камера включена';
     $('btnCam').disabled = true;
-    $('btnCalib').disabled = false; $('btnRot').disabled = false;
+    $('btnCalib').disabled = false; $('btnRot').disabled = false; $('btnToggleAR').disabled = false;
     rebuildH();
     needSync = true; fRef = null; fPrev = null; stable = 0;
     if (H) { setStage(''); setStat('Камера работает, сетка с прошлого раза. Если доска сдвинулась, нажми «Разметить доску».'); }
@@ -931,8 +945,9 @@ view.addEventListener('click', ev => {
 
 function drawOverlay() {
   if (H) {
+    // 1. Отрисовка сетки
     vctx.lineWidth = 1.5;
-    vctx.strokeStyle = 'rgba(245,184,61,.9)';
+    vctx.strokeStyle = 'rgba(245,184,61,.85)';
     vctx.beginPath();
     for (let i = 0; i <= 8; i++) {
       const a = applyH(H, i / 8, 0), b = applyH(H, i / 8, 1);
@@ -941,7 +956,81 @@ function drawOverlay() {
       vctx.moveTo(c[0], c[1]); vctx.lineTo(d[0], d[1]);
     }
     vctx.stroke();
-    vctx.font = 'bold 16px system-ui,sans-serif';
+
+    // 2. Отрисовка подсветки рекомендуемого хода на камере (AR Hint & Arrow)
+    const showHint = hintState === 'ready' && hintValid();
+    if (showHint && hint && hint.move) {
+      const m = hint.move;
+      const uvFrom = squareUV(m.from & 7, m.from >> 3, userSide, rot);
+      const uvTo = squareUV(m.to & 7, m.to >> 3, userSide, rot);
+
+      const pFrom = applyH(H, uvFrom[0] + 0.5 / 8, uvFrom[1] + 0.5 / 8);
+      const pTo = applyH(H, uvTo[0] + 0.5 / 8, uvTo[1] + 0.5 / 8);
+
+      // Рисуем круги подсветки клеток источника и цели
+      vctx.fillStyle = 'rgba(76, 195, 138, 0.4)';
+      vctx.strokeStyle = '#4CC38A';
+      vctx.lineWidth = 2.5;
+
+      vctx.beginPath();
+      vctx.arc(pFrom[0], pFrom[1], 16, 0, Math.PI * 2);
+      vctx.fill(); vctx.stroke();
+
+      vctx.beginPath();
+      vctx.arc(pTo[0], pTo[1], 16, 0, Math.PI * 2);
+      vctx.fill(); vctx.stroke();
+
+      // Стрелка от pFrom к pTo
+      const angle = Math.atan2(pTo[1] - pFrom[1], pTo[0] - pFrom[0]);
+      vctx.lineWidth = 4;
+      vctx.strokeStyle = '#F5B83D';
+      vctx.fillStyle = '#F5B83D';
+      
+      vctx.beginPath();
+      vctx.moveTo(pFrom[0], pFrom[1]);
+      vctx.lineTo(pTo[0], pTo[1]);
+      vctx.stroke();
+
+      // Наконечник стрелки
+      const headLen = 12;
+      vctx.beginPath();
+      vctx.moveTo(pTo[0], pTo[1]);
+      vctx.lineTo(pTo[0] - headLen * Math.cos(angle - Math.PI / 6), pTo[1] - headLen * Math.sin(angle - Math.PI / 6));
+      vctx.lineTo(pTo[0] - headLen * Math.cos(angle + Math.PI / 6), pTo[1] - headLen * Math.sin(angle + Math.PI / 6));
+      vctx.closePath();
+      vctx.fill();
+    }
+
+    // 3. Отрисовка виртуальных фигур прямо в сетке (AR Overlay)
+    if (showAR) {
+      vctx.font = 'bold 22px system-ui, sans-serif';
+      vctx.textAlign = 'center';
+      vctx.textBaseline = 'middle';
+
+      for (let sq = 0; sq < 64; sq++) {
+        const p = st.board[sq];
+        if (!p) continue;
+
+        const uv = squareUV(sq & 7, sq >> 3, userSide, rot);
+        const center = applyH(H, uv[0] + 0.5 / 8, uv[1] + 0.5 / 8);
+
+        const sym = SOLID[p.toUpperCase()];
+        const whitePiece = isWhite(p);
+
+        // Обводка для читаемости поверх реальных фигур
+        vctx.strokeStyle = whitePiece ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)';
+        vctx.lineWidth = 3;
+        vctx.strokeText(sym, center[0], center[1]);
+
+        vctx.fillStyle = whitePiece ? '#FFFFFF' : '#10161C';
+        vctx.fillText(sym, center[0], center[1]);
+      }
+    }
+
+    // 4. Отрисовка угловых меток a1 и h8
+    vctx.font = 'bold 15px system-ui,sans-serif';
+    vctx.textAlign = 'left';
+    vctx.textBaseline = 'alphabetic';
     vctx.fillStyle = '#fff';
     vctx.strokeStyle = 'rgba(0,0,0,.8)';
     vctx.lineWidth = 3;
@@ -953,6 +1042,7 @@ function drawOverlay() {
       vctx.fillText(t, p[0] - 10, p[1] + 6);
     }
   }
+
   if (calibMode) {
     vctx.fillStyle = 'rgba(245,184,61,.95)';
     vctx.strokeStyle = '#000';
@@ -960,6 +1050,7 @@ function drawOverlay() {
     calibTaps.forEach((p, i) => {
       vctx.beginPath(); vctx.arc(p[0], p[1], 8, 0, Math.PI * 2); vctx.fill(); vctx.stroke();
       vctx.fillStyle = '#000'; vctx.font = 'bold 11px system-ui,sans-serif';
+      vctx.textAlign = 'left';
       vctx.fillText(String(i + 1), p[0] - 3, p[1] + 4);
       vctx.fillStyle = 'rgba(245,184,61,.95)';
     });
@@ -969,7 +1060,7 @@ function drawOverlay() {
 let lastDraw = 0;
 function drawLoop(ts) {
   requestAnimationFrame(drawLoop);
-  if (!camOn || ts - lastDraw < 66) return;
+  if (!camOn || ts - lastDraw < 33) return; // Оптимизация до ~30 FPS
   lastDraw = ts;
   try {
     vctx.drawImage(video, 0, 0, CW, CH);
@@ -1036,6 +1127,10 @@ $('btnRot').addEventListener('click', () => {
   rot = (rot + 1) % 4; saveSettings();
   needSync = true; fRef = null; fPrev = null; stable = 0;
   setStat('Сетка повёрнута. Проверь подписи a1 и h8 на картинке.');
+});
+$('btnToggleAR').addEventListener('click', () => {
+  showAR = !showAR; saveSettings();
+  renderSide();
 });
 function setSide(s) {
   if (s === userSide) return;
